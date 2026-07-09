@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Zap, Sparkles, PencilLine, Palette, Upload, Cpu, Smartphone, Rocket } from "lucide-react"
+import { Zap, PencilLine, Palette, Upload, Cpu, Smartphone, Rocket } from "lucide-react"
 import "./LandingPage.css"
-import { SlideRenderer, PreviewScaleWrapper, type Slide } from "@/components/carousel/SlideRenderer"
+import { type Slide } from "@/components/carousel/SlideRenderer"
 
 const creamTheme = {
   bg: "#FAFAFA",
@@ -329,7 +329,9 @@ function CoverflowDemo({ slides, theme }: { slides: Slide[]; theme: any }) {
           <div
             className="coverflow-card"
             key={i}
-            ref={(el) => (cardRefs.current[i] = el)}
+            ref={(el) => {
+              cardRefs.current[i] = el;
+            }}
             style={{
               marginLeft: i === 0 ? 0 : "-139px",
             }}
