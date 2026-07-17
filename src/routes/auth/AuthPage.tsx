@@ -121,6 +121,7 @@ export default function AuthPage({ onAuthSuccess }: { onAuthSuccess: () => void 
                   setGoogleLoading(true)
                   try {
                     await signInWithGoogle()
+                    onAuthSuccess()
                   } catch (error) {
                     console.error(error)
                   } finally {
