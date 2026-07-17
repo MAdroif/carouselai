@@ -119,7 +119,11 @@ export default function App() {
           user={user}
         >
           <Routes>
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={
+              loadingUser ? <div className="flex h-screen items-center justify-center">Loading...</div> :
+              user ? <Navigate to="/app" /> :
+              <LandingPage />
+            } />
             <Route path="/app" element={
               user ? (
                 <GeneratorPage userTokens={userTokens ?? 0} onTokensChange={fetchTokens} />
