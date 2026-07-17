@@ -1,265 +1,42 @@
 import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Zap, PencilLine, Palette, Upload, Cpu, Smartphone, Rocket } from "lucide-react"
+import { Zap, PencilLine, Palette, Upload, Cpu, Smartphone, Rocket, Heart, MessageCircle, Send, Bookmark } from "lucide-react"
+import HeroVisual from "./HeroVisual"
 import "./LandingPage.css"
-import { type Slide } from "@/components/carousel/SlideRenderer"
 
-const creamTheme = {
-  bg: "#FAFAFA",
-  name: "Minimalist Clean",
-  text: "#27272A",
-  bgAlt: "#F4F4F5",
-  accent: "#09090B",
-  gradient: "linear-gradient(180deg, #FAFAFA 0%, #F4F4F5 100%)",
-  highlight: "#F97316",
-  textMuted: "#71717A",
-  accentText: "#FFFFFF",
-  fontWeight: "500",
-}
-
-const exampleSlides: Slide[] = [
-  {
-    items: [],
-    slide: 1,
-    title: "Desain Carousel Lu Bagus Tapi Sepi Mulu?",
-    svg_code: "<svg viewBox='0 0 100 100'><circle cx='100' cy='50' r='40' fill='currentColor' opacity='0.08'/><line x1='10' y1='10' x2='90' y2='10' stroke='currentColor' stroke-width='0.5' stroke-dasharray='2'/></svg>",
-    body_text: "Ternyata ini penyebab aslinya, sadar gak?",
-    highlights: ["sadar gak?"],
-    highlight_bg: "#F97316",
-    image_keyword: "minimalist design concept",
-    composition: { focus: "headline", style: "bold", accent: "none", alignment: "center" },
-  },
-  {
-    items: [],
-    slide: 2,
-    title: "Bukan Soal Estetika, Tapi Soal Retensi",
-    svg_code: "<svg viewBox='0 0 100 100'><line x1='10' y1='0' x2='10' y2='100' stroke='currentColor' stroke-width='0.2' stroke-dasharray='1 3'/><line x1='30' y1='0' x2='30' y2='100' stroke='currentColor' stroke-width='0.2' stroke-dasharray='1 3'/><line x1='50' y1='0' x2='50' y2='100' stroke='currentColor' stroke-width='0.2' stroke-dasharray='1 3'/></svg>",
-    body_text: "Algoritma gak peduli sama visual estetik kamu.",
-    highlights: ["visual estetik kamu"],
-    highlight_bg: "#F97316",
-    image_keyword: "simple minimal graphic",
-    composition: { focus: "balanced", style: "minimalist", accent: "line", alignment: "left" },
-  },
-  {
-    items: [
-      {
-        item_title: "1. Swipe Ke Kanan",
-        icon_keyword: "swipe",
-        item_description: "Nunjukin kalau audiens kamu beneran tertarik membaca kelanjutan ceritamu.",
-      },
-      {
-        item_title: "2. Waktu Membaca",
-        icon_keyword: "time",
-        item_description: "Sembari swipe, dwell time atau durasi bertahan di postinganmu otomatis meroket.",
-      },
-      {
-        item_title: "3. Sinyal FYP",
-        icon_keyword: "signal",
-        item_description: "Sistem ngebaca ini sebagai sinyal positif dan langsung nyebarin kontenmu lebih luas.",
-      },
-    ],
-    slide: 3,
-    title: "Gini Cara Kerja Mesin Rekomendasi IG",
-    svg_code: "<svg viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='none' stroke='currentColor' stroke-width='0.5' stroke-dasharray='4'/><circle cx='50' cy='50' r='30' fill='none' stroke='currentColor' stroke-width='0.3' stroke-dasharray='2'/></svg>",
-    body_text: "Setiap swipe itu kayak vote buat kontenmu.",
-    highlights: ["vote buat kontenmu"],
-    image_keyword: "organic workflow connection",
-    composition: { focus: "balanced", style: "card-flow", accent: "none", alignment: "left" },
-  },
-  {
-    items: [
-      {
-        item_title: "Hook Kuat",
-        icon_keyword: "hook",
-        item_description: "Bikin rasa penasaran yang gak tertahankan di 3 detik pertama slide satu kamu.",
-      },
-      {
-        item_title: "Jembatan Logika",
-        icon_keyword: "bridge",
-        item_description: "Tiap akhir slide harus bikin orang reflek bertanya 'eh terus kelanjutannya gimana?'.",
-      },
-      {
-        item_title: "Satu Topik",
-        icon_keyword: "focus",
-        item_description: "Jangan maruk. Bahas satu masalah spesifik aja biar audiens gak pusing bacanya.",
-      },
-    ],
-    slide: 4,
-    title: "3 Aturan Biar Orang Betah Swipe",
-    svg_code: "<svg viewBox='0 0 100 100'><rect x='10' y='10' width='30' height='30' fill='none' stroke='currentColor' stroke-width='0.5' stroke-dasharray='1'/><rect x='60' y='10' width='30' height='30' fill='none' stroke='currentColor' stroke-width='0.5' stroke-dasharray='1'/><rect x='10' y='60' width='30' height='30' fill='none' stroke='currentColor' stroke-width='0.5' stroke-dasharray='1'/></svg>",
-    body_text: "Kamu harus kuasai psikologi pembaca ini.",
-    highlights: ["psikologi pembaca"],
-    image_keyword: "strategy rules concept",
-    composition: { focus: "balanced", style: "card-grid", accent: "none", alignment: "left" },
-  },
-  {
-    items: [],
-    slide: 5,
-    title: "Carousel Itu Kayak Naik Tangga",
-    svg_code: "<svg viewBox='0 0 100 100'><path d='M 10 90 L 30 70 L 50 50 L 70 30 L 90 10' fill='none' stroke='currentColor' stroke-width='0.5' stroke-dasharray='2'/></svg>",
-    body_text: "Kalo ada satu anak tangga yang bolong, audiens bakalan langsung males naik dan pergi.",
-    highlights: ["langsung males naik"],
-    highlight_bg: "#F97316",
-    image_keyword: "clean step analogy",
-    composition: { focus: "balanced", style: "minimalist", accent: "clean-sans", alignment: "left" },
-  },
-  {
-    items: [],
-    slide: 6,
-    title: "Siap Bikin Carousel Yang Gak Dilewati?",
-    svg_code: "<svg viewBox='0 0 100 100'><circle cx='50' cy='100' r='48' fill='none' stroke='currentColor' stroke-width='1'/><circle cx='50' cy='100' r='40' fill='none' stroke='currentColor' stroke-width='0.5' stroke-dasharray='2'/></svg>",
-    body_text: "Coba praktekin tips ini di konten kamu selanjutnya!",
-    highlights: ["konten kamu selanjutnya!"],
-    highlight_bg: "#F97316",
-    image_keyword: "minimal success arrow",
-    composition: { focus: "headline", style: "bold", accent: "pill", alignment: "center" },
-  },
-]
-
-const FAQS = [
-  {
-    q: "Tool ini cocok buat siapa?",
-    a: "Content creator dan social media manager yang butuh bikin carousel cepat untuk konten harian. Kalau kamu tipe yang suka ngulik desain sampai pixel-perfect, Canva tetap lebih cocok. Tool ini buat yang mau langsung posting.",
-  },
-  {
-    q: "Apa bedanya dengan Canva?",
-    a: "CarouselAI fokus ke kecepatan dan otomatisasi. Masukkan ide, pilih template, download. Canva lebih fleksibel tapi lebih makan waktu.",
-  },
-  {
-    q: "Berapa lama prosesnya?",
-    a: "Biasanya selesai dalam 60 detik, tergantung jumlah slide dan panjang konten.",
-  },
-  {
-    q: "Apakah ada versi gratis untuk coba dulu?",
-    a: "Ada. Begitu daftar, kamu langsung dapat kredit gratis untuk coba generate carousel. Mau lebih banyak? Cek paket di halaman Pricing.",
-  },
-]
-
-function HeroCard({ item, theme }: { item: any; theme: any }) {
+function IGMockup({ images, className }: { images: string[]; className?: string }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "flex-start", gap: "8px",
-      backgroundColor: theme.bgAlt, border: `1px solid ${theme.accent}33`,
-      borderRadius: "8px", padding: "8px", width: "100%", boxSizing: "border-box",
-      color: theme.text, fontWeight: theme.fontWeight
-    }}>
-      <div style={{
-        width: "24px", height: "24px", minWidth: "24px", borderRadius: "6px",
-        backgroundColor: `${theme.accent}22`, display: "flex",
-        alignItems: "center", justifyContent: "center",
-      }}>
-        <div style={{ width: "12px", height: "12px", backgroundColor: theme.accent, borderRadius: "2px" }} />
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "2px", textAlign: "left" }}>
-        <h4 style={{ margin: 0, fontSize: "0.75rem", fontWeight: 700, lineHeight: 1.2 }}>
-          {item.item_title}
-        </h4>
-        <p style={{ margin: 0, fontSize: "0.65rem", color: theme.textMuted, lineHeight: 1.3 }}>
-          {item.item_description}
-        </p>
+    <div className={`ig-mockup-container ${className}`}>
+      <div className="ig-screen">
+        <div className="ig-header">
+          <div className="ig-user-info">
+            <div className="ig-avatar" />
+            <span className="ig-username">dataframe</span>
+          </div>
+          <div className="ig-options">•••</div>
+        </div>
+
+        <div className="ig-carousel-viewport">
+          {images.map((src, i) => (
+            <div key={i} className="ig-slide-wrapper">
+              <img src={src} alt={`Slide ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </div>
+          ))}
+        </div>
+
+        <div className="ig-footer">
+          <div className="ig-actions">
+            <Heart className="size-6" />
+            <MessageCircle className="size-6" />
+            <Send className="size-6" />
+          </div>
+          <div className="ig-bookmark">
+            <Bookmark className="size-6" />
+          </div>
+        </div>
       </div>
     </div>
   )
-}
-
-function HeroHighlightedText({ text, highlights, color, bg }: { text: string; highlights?: string[]; color: string; bg?: string }) {
-  if (!highlights || highlights.length === 0) return <>{text}</>;
-  
-  const pattern = highlights.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  const regex = new RegExp(`(${pattern})`, 'gi');
-  const parts = text.split(regex);
-
-  return (
-    <>
-      {parts.map((part, i) => {
-        const isHighlight = highlights.some(h => h.toLowerCase() === part.toLowerCase());
-        return isHighlight ? (
-          <span key={i} style={{ backgroundColor: bg || `${color}33`, padding: "0 4px", borderRadius: "4px", fontWeight: 700 }}>
-            {part}
-          </span>
-        ) : <span key={i}>{part}</span>;
-      })}
-    </>
-  );
-}
-
-function HeroCardLayout({ slide, theme }: { slide: any; theme: any }) {
-  const { style, alignment, accent } = slide.composition;
-  const items = slide.items || [];
-
-  return (
-    <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", gap: "16px" }}>
-      {/* SVG Background Decoration */}
-      {slide.svg_code && (
-        <div style={{
-          position: "absolute", inset: 0, zIndex: 0, opacity: 0.3,
-          pointerEvents: "none", color: theme.accent
-        }}>
-          <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: slide.svg_code }} />
-        </div>
-      )}
-
-      <div style={{ position: "relative", zIndex: 1, width: "100%" }}>
-        {/* Title with Accents */}
-        <div style={{ 
-          display: "flex", 
-          justifyContent: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end",
-          marginBottom: "12px" 
-        }}>
-          {accent === "pill" ? (
-            <div style={{
-              backgroundColor: theme.bgAlt, padding: "6px 16px", borderRadius: "100px",
-              border: `1px solid ${theme.accent}44`, display: "inline-block"
-            }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: theme.fontWeight, color: theme.text, margin: 0, lineHeight: 1.2 }}>
-                {slide.title}
-              </h3>
-            </div>
-          ) : (
-            <div style={{ position: "relative" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: theme.fontWeight, color: theme.text, margin: 0, lineHeight: 1.2 }}>
-                {slide.title}
-              </h3>
-              {accent === "line" && (
-                <div style={{ 
-                  width: "40px", height: "4px", backgroundColor: theme.highlight, 
-                  marginTop: "4px", borderRadius: "2px",
-                  alignSelf: alignment === "center" ? "center" : "flex-start"
-                }} />
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Content Layout */}
-        {style === "card-grid" && items.length > 0 ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", width: "100%" }}>
-            {items.map((item: any, i: number) => <HeroCard key={i} item={item} theme={theme} />)}
-          </div>
-        ) : style === "card-flow" && items.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
-            {items.map((item: any, i: number) => <HeroCard key={i} item={item} theme={theme} />)}
-          </div>
-        ) : (
-          <div style={{ 
-            width: "100%", 
-            textAlign: alignment, 
-            fontSize: "0.9rem", 
-            color: theme.text, 
-            fontWeight: 300,
-            lineHeight: 1.5 
-          }}>
-            <HeroHighlightedText 
-              text={slide.body_text} 
-              highlights={slide.highlights} 
-              color={theme.text} 
-              bg={slide.highlight_bg} 
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }
 
 function FaqItem({ q, a }: { q: string; a: string }) {
@@ -273,97 +50,6 @@ function FaqItem({ q, a }: { q: string; a: string }) {
       <div className="faq-a">
         <p>{a}</p>
       </div>
-    </div>
-  )
-}
-
-function CoverflowDemo({ slides, theme }: { slides: Slide[]; theme: any }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const cardRefs = useRef<(HTMLDivElement | null)[]>([])
-
-  const updateOffsets = () => {
-    requestAnimationFrame(() => {
-      const container = scrollRef.current
-      if (!container) return
-
-      const containerRect = container.getBoundingClientRect()
-      const containerCenter = containerRect.left + containerRect.width / 2
-
-      cardRefs.current.forEach((card) => {
-        if (!card) return
-        const cardRect = card.getBoundingClientRect()
-        const cardCenter = cardRect.left + cardRect.width / 2
-        const offset = (cardCenter - containerCenter) / cardRect.width
-        const clamped = Math.max(-2.2, Math.min(2.2, offset))
-        const distance = Math.abs(clamped)
-        const scale = 1 - Math.min(distance * 0.22, 0.4)
-        const opacity = 1 - Math.min(distance * 0.35, 0.6)
-        const blur = Math.min(distance * 3, 5)
-        const zIndex = 100 - Math.round(distance * 10)
-
-        card.style.transform = `scale(${scale})`
-        card.style.opacity = `${opacity}`
-        card.style.filter = `blur(${blur}px)`
-        card.style.zIndex = `${zIndex}`
-      })
-    })
-  }
-
-  useEffect(() => {
-    updateOffsets()
-    const container = scrollRef.current
-    if (!container) return
-    container.addEventListener("scroll", updateOffsets, { passive: true })
-    window.addEventListener("resize", updateOffsets)
-    return () => {
-      container.removeEventListener("scroll", updateOffsets)
-      window.removeEventListener("resize", updateOffsets)
-    }
-  }, [])
-
-  return (
-    <div className="coverflow-scroll" ref={scrollRef}>
-      <div className="coverflow-spacer" />
-      {slides.map((slide, i) => {
-        return (
-          <div
-            className="coverflow-card"
-            key={i}
-            ref={(el) => {
-              cardRefs.current[i] = el;
-            }}
-            style={{
-              marginLeft: i === 0 ? 0 : "-139px",
-            }}
-          >
-            <div style={{
-              width: '260px',
-              height: '260px',
-              backgroundColor: theme.bg,
-              borderRadius: '20px',
-              overflow: 'hidden',
-              border: `1px solid ${theme.accent}22`,
-            }}>
-              <div style={{
-                width: '400px',
-                height: '400px',
-                padding: '24px',
-                boxSizing: 'border-box',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'flex-start',
-                gap: '18px',
-                color: theme.text,
-                transform: 'scale(0.65)',
-                transformOrigin: 'top left',
-              }}>
-                <HeroCardLayout slide={slide} theme={theme} />
-              </div>
-            </div>
-          </div>
-        )
-      })}
-      <div className="coverflow-spacer" />
     </div>
   )
 }
@@ -406,7 +92,6 @@ export default function LandingPage() {
         </a>
         <div className="nav-right">
           <a href="#how-it-works" className="nav-link">Cara Kerja</a>
-          {/* <a href="/pricing" className="nav-link">Harga</a> */}
           <button className="btn-primary" onClick={() => navigate("/auth")}>Masuk</button>
         </div>
       </nav>
@@ -420,30 +105,57 @@ export default function LandingPage() {
         <div className="hero-container">
           <div className="hero-content">
             <h1>
-              Konten Carousel
-              <span className="line-accent">Auto Jadi dalam 60 Detik</span>
+              Ide Konten
+              <span className="line-accent">Jadi Carousel dalam 60 Detik</span>
             </h1>
-
             <p className="hero-sub">
-              Masukkan ide, tema dan jumlah slide yang kamu inginkan. AI yang urus layout, warna, dan slidenya.
-              Tinggal download dan posting ke Instagram atau TikTok.
+              Stop buang waktu buat hal repetitif seperti atur layout dan warna. Fokus ke ide dan strategi kontenmu, biar AI yang eksekusi visualnya. Cepat, simpel, dan ramah di kantong.
             </p>
-
             <button className="submit-btn" onClick={() => navigate("/auth")}>
-              Mulai Gratis
+              Coba Gratis Sekarang
             </button>
-            <p className="cta-subtext">Gratis, cepat dan tanpa ribet.</p>
+            <p className="cta-subtext">Klaim kredit gratismu sekarang.</p>
           </div>
-
           <div className="hero-visual">
-            <CoverflowDemo slides={exampleSlides} theme={creamTheme} />
+            <HeroVisual />
           </div>
         </div>
       </section>
 
+      <div className="gallery-wrapper reveal">
+        <div className="section-tag">Satu AI, Banyak Gaya</div>
+        <h2 className="section-title">Hasilnya Selalu Beda,<br />Sesuai Topik Kamu</h2>
+        <div className="gallery-track">
+          <IGMockup images={[
+            "/assets/landing/minimalist-clean/slide-1.webp",
+            "/assets/landing/minimalist-clean/slide-2.webp",
+            "/assets/landing/minimalist-clean/slide-3.webp",
+            "/assets/landing/minimalist-clean/slide-4.webp",
+            "/assets/landing/minimalist-clean/slide-5.webp",
+            "/assets/landing/minimalist-clean/slide-6.webp"
+          ]} />
+          <IGMockup images={[
+            "/assets/landing/bold-stabilu/slide-1.webp",
+            "/assets/landing/bold-stabilu/slide-2.webp",
+            "/assets/landing/bold-stabilu/slide-3.webp",
+            "/assets/landing/bold-stabilu/slide-4.webp",
+            "/assets/landing/bold-stabilu/slide-5.webp",
+            "/assets/landing/bold-stabilu/slide-6.webp"
+          ]} />
+          <IGMockup images={[
+            "/assets/landing/bold/slide-1.webp",
+            "/assets/landing/bold/slide-2.webp",
+            "/assets/landing/bold/slide-3.webp",
+            "/assets/landing/bold/slide-4.webp",
+            "/assets/landing/bold/slide-5.webp",
+            "/assets/landing/bold/slide-6.webp"
+          ]} />
+        </div>
+      </div>
+
       <div className="demo-wrapper reveal">
-        <div className="section-tag">Liat Sendiri</div>
-        <h2 className="section-title">Prosesnya Beneran Secepat Ini</h2>
+        <div className="section-tag">Intip Prosesnya</div>
+        <h2 className="section-title">Ide Jadi Visual<br />dalam Sekejap</h2>
         <div className="demo-container">
           <div className="demo-topbar">
             <div className="dot-red" />
@@ -458,14 +170,14 @@ export default function LandingPage() {
             playsInline
             style={{ width: '100%', display: 'block' }}
           >
-            <source src="/dashboard-demo.mp4" type="video/mp4" />
+            <source src="/dashboard-demo1.mp4" type="video/mp4" />
             Your browser does not support the video tag.
           </video>
         </div>
       </div>
 
       <div className="section reveal" id="how-it-works">
-        <div className="section-tag">Cara Kerja</div>
+        <div className="section-tag">Proses 60 Detik</div>
         <h2 className="section-title">Tiga langkah,<br />carousel siap posting</h2>
         <p className="section-sub">Desain bukan lagi bottleneck. Kamu fokus ke ide, AI yang eksekusi.</p>
 
@@ -480,34 +192,34 @@ export default function LandingPage() {
             <div className="step-num">02</div>
             <div className="step-icon"><Palette className="size-5" /></div>
             <h3>Pilih Tema</h3>
-            <p>Pilih dari berbagai tema yang sudah dioptimasi buat engagement di sosial media.</p>
+            <p>Pilih dari berbagai tema, dari yang minimalis sampai yang bold.</p>
           </div>
           <div className="step-card">
             <div className="step-num">03</div>
             <div className="step-icon"><Upload className="size-5" /></div>
             <h3>Download & Posting</h3>
-            <p>Ekspor dalam format 1:1, siap langsung upload ke Instagram, TikTok, atau LinkedIn.</p>
+            <p>Ekspor dalam format 4:5, siap langsung upload ke Instagram, TikTok.</p>
           </div>
         </div>
       </div>
 
       <div className="section reveal">
         <div className="section-tag">Kenapa CarouselAI</div>
-        <h2 className="section-title">Dirancang untuk<br />content creator yang sibuk</h2>
-        <p className="section-sub">Bukan pengganti Canva. Ini tool buat yang mau posting cepat tanpa ribet desain.</p>
+        <h2 className="section-title">Bikin Konten<br />Gak Harus Siksa Diri</h2>
+        <p className="section-sub">Bukan pengganti kreativitas. Ini tool buat kamu yang benci kerjaan repetitif saat desain.</p>
 
         <div className="benefits-grid">
           <div className="benefit-card">
             <div className="benefit-icon-wrap"><Zap className="size-5" /></div>
-            <div><h3>Hemat Waktu Drastis</h3><p>Yang biasanya 2 jam di Canva, selesai dalam 60 detik.</p></div>
+            <div><h3>Bye-bye Kerja Repetitif</h3><p>Yang biasanya 2 jam geser-geser elemen di Canva, selesai dalam 60 detik. Waktumu terlalu berharga untuk sekadar atur margin.</p></div>
           </div>
           <div className="benefit-card">
             <div className="benefit-icon-wrap"><Cpu className="size-5" /></div>
-            <div><h3>AI-Powered Layout</h3><p>AI yang pilih hierarki teks, warna, dan komposisi slide. Hasilnya konsisten dan siap posting.</p></div>
+            <div><h3>Ide &gt; Desain</h3><p>Fokus ke riset topik dan strategi marketing agar konten high-engagement. Urusan visual? Serahkan ke AI.</p></div>
           </div>
           <div className="benefit-card">
             <div className="benefit-icon-wrap"><Smartphone className="size-5" /></div>
-            <div><h3>Multi-Platform Ready</h3><p>Format 1:1 yang dioptimasi buat semua platform. Satu kali bikin, bisa posting di mana aja.</p></div>
+            <div><h3>Harga Ramah, Hasil Instan</h3><p>Didesain khusus untuk creator Indonesia. Gak perlu langganan tool mahal untuk bisa konsisten posting setiap hari.</p></div>
           </div>
           <div className="benefit-card">
             <div className="benefit-icon-wrap"><Rocket className="size-5" /></div>
@@ -521,9 +233,9 @@ export default function LandingPage() {
           <div>
             <h2>Kenapa Gue Bikin Tool Ini</h2>
             <p>Dulu gue spend 2-3 jam setiap kali bikin carousel buat konten. Buka Canva, pilih template, copy-paste teks satu-per-satu, atur layout, capek banget.</p>
-            <p>Gue kepikiran: "Harusnya ini bisa otomatis." AI bisa breakdown teks jadi slide, pilih layout yang bagus, atur warna konsisten.</p>
+            <p>Gue kepikiran: "Harusnya ini bisa otomatis." Gue benci banget sama bagian repetitif dari desain. Gue pengen fokus di brainstorming ide, bukan di pixel-pushing.</p>
             <p>Akhirnya gue bikin tool ini. Sekarang gue pakai sendiri setiap hari. Yang dulu 2 jam, sekarang cuma butuh 60 detik.</p>
-            <p><strong>Kalau gue gak yakin tool ini useful, gue gak akan release.</strong></p>
+            <p><strong>Kalau gue gak yakin tool ini useful buat buang kerjaan repetitif, gue gak akan release.</strong></p>
           </div>
           <div className="founder-cta">
             <p>Mau coba sendiri?</p>
@@ -543,7 +255,7 @@ export default function LandingPage() {
       <div className="bottom-cta reveal">
         <div className="orb-bg" />
         <div className="bottom-cta-content">
-          <h2>Jangan buang waktu<br />desain carousel manual</h2>
+          <h2>Berhenti jadi budak desain,<br />mulai jadi strategist.</h2>
           <p>Coba dulu sebelum bayar apa pun.</p>
           <button className="btn-primary" onClick={() => navigate("/auth")}>Coba Sekarang →</button>
         </div>
@@ -555,3 +267,22 @@ export default function LandingPage() {
     </div>
   )
 }
+
+const FAQS = [
+  {
+    q: "Tool ini cocok buat siapa?",
+    a: "Content creator dan social media manager yang benci kerjaan repetitif saat desain. Kalau kamu lebih suka ngulik desain sampai pixel-perfect, Canva tetap lebih cocok. Tool ini buat yang mau fokus ke ide konten dan posting cepat.",
+  },
+  {
+    q: "Apa bedanya dengan Canva?",
+    a: "CarouselAI fokus ke kecepatan dan penghapusan tugas repetitif. Masukkan ide, pilih tema, download. Canva lebih fleksibel tapi jauh lebih makan waktu.",
+  },
+  {
+    q: "Berapa lama prosesnya?",
+    a: "Biasanya selesai dalam 60 detik, tergantung jumlah slide dan panjang konten.",
+  },
+  {
+    q: "Apakah ada versi gratis untuk coba dulu?",
+    a: "Ada. Begitu daftar, kamu langsung dapat kredit gratis untuk validasi apakah tool ini cocok dengan alur kerjamu. Mau lebih banyak? Cek paket di halaman Pricing.",
+  },
+]

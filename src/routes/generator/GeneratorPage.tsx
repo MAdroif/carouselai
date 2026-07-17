@@ -8,8 +8,9 @@ import { GenerationControls } from "@/components/carousel/GenerationControls"
 import { PRESET_THEMES, type Theme } from "@/lib/themes"
 import { exportPNG, exportPDF } from "@/lib/export"
 import { ImageIcon, FileText, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
+import { parseError } from "@/lib/utils"
 
-function SlidePreview({ slide, theme, onClick }: { slide: Slide; theme: Theme; onClick: (s: Slide) => void }) {
+function SlidePreview({ slide, theme, totalSlides, onClick }: { slide: Slide; theme: Theme; totalSlides: number; onClick: (s: Slide) => void }) {
   const [containerWidth, setContainerWidth] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -28,7 +29,7 @@ function SlidePreview({ slide, theme, onClick }: { slide: Slide; theme: Theme; o
     <div
       ref={ref}
       className="cursor-pointer relative overflow-hidden bg-white rounded-lg shadow-sm"
-      style={{ aspectRatio: '1/1' }}
+      style={{ aspectRatio: '4/5' }}
       onClick={() => onClick(slide)}
     >
       <div
@@ -36,10 +37,10 @@ function SlidePreview({ slide, theme, onClick }: { slide: Slide; theme: Theme; o
         style={{
           transform: `scale(${containerWidth / 1080})`,
           width: '1080px',
-          height: '1080px'
+          height: '1350px'
         }}
       >
-        <SlideRenderer slide={slide} theme={theme} />
+        <SlideRenderer slide={slide} theme={theme} totalSlides={totalSlides} />
       </div>
     </div>
   )
@@ -82,6 +83,10 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
       onTokensChange()
     } catch (error: any) {
       console.error(error)
+      const errorMessage = parseError(error)
+      toast.error("Generation Gagal", {
+        description: errorMessage,
+      })
     } finally {
       setLoading(false)
     }
@@ -137,6 +142,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                 key={i}
                 slide={s}
                 theme={selectedTheme}
+                totalSlides={slides.length}
                 onClick={() => setSelectedSlideIndex(i)}
               />
             ))}
@@ -152,7 +158,11 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
             </div>
             <div className="relative flex items-center justify-center">
               <PreviewScaleWrapper width={500}>
-                <SlideRenderer slide={slides[selectedSlideIndex]} theme={selectedTheme} />
+                <SlideRenderer
+                  slide={slides[selectedSlideIndex]}
+                  theme={selectedTheme}
+                  totalSlides={slides.length}
+                />
               </PreviewScaleWrapper>
               <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none">
                 <Button

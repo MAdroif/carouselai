@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import { Home, History, X, Menu, LogOut, User, Zap, BookOpen, Shield, FileText, Sun, Moon } from "lucide-react"
 import { signOut } from "@/lib/auth"
 import { useNavigate } from "react-router-dom"
+import { useTheme } from "@/components/theme-provider"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
@@ -9,14 +10,17 @@ interface SidebarProps {
   sidebarOpen: boolean
   setSidebarOpen: (open: boolean) => void
   currentPage: string
-  tokens: number
+  tokens: number | null
   user: any
-  darkMode: boolean
-  setDarkMode: (val: boolean) => void
 }
 
-export function Sidebar({ sidebarOpen, setSidebarOpen, currentPage, tokens, user, darkMode, setDarkMode }: SidebarProps) {
+export function Sidebar({ sidebarOpen, setSidebarOpen, currentPage, tokens, user }: SidebarProps) {
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme()
+
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark')
+  }
 
   return (
       <div className="h-full flex flex-col dark:bg-[#1A1A1A] border dark:border-[#2e2e2e] sticky top-0 overscroll-none transition-colors duration-300">
@@ -52,7 +56,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, currentPage, tokens, user
             <PopoverTrigger asChild>
               <Button variant="ghost" className={`w-full h-12 flex ${sidebarOpen ? "justify-start gap-4 px-4" : "justify-center px-0"}`}>
                 <Zap size={20} className="text-amber-500" />
-                {sidebarOpen && <span className="font-medium text-sm">Credit: {tokens}</span>}
+                {sidebarOpen && <span className="font-medium text-sm">Credit: {tokens !== null ? tokens : '...'}</span>}
               </Button>
             </PopoverTrigger>
             <PopoverContent side="right" className="w-60 p-4 space-y-4 bg-white
@@ -61,7 +65,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, currentPage, tokens, user
                 <p className="text-xs font-semibold text-[#888888] uppercase">Paket Saat Ini</p>
                 <p className="font-semibold flex justify-between">
                   <span>Starter Plan</span>
-                  <span className="text-blue-500">{tokens} Credits</span>
+                  <span className="text-blue-500">{tokens !== null ? `${tokens} Credits` : 'Loading...'}</span>
                 </p>
               </div>
               {/* <Button className="w-full bg-blue-600 hover:bg-blue-700
@@ -93,13 +97,13 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, currentPage, tokens, user
           </Popover>
 
           {/* Theme Toggle */}
-          <Button 
-            variant="ghost" 
-            onClick={() => setDarkMode(!darkMode)}
+          <Button
+            variant="ghost"
+            onClick={toggleTheme}
             className={`w-full h-12 flex ${sidebarOpen ? "justify-start gap-4 px-4" : "justify-center px-0"}`}
           >
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-            {sidebarOpen && <span className="font-medium text-sm">{darkMode ? 'Light Mode' : 'Dark Mode'}</span>}
+            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            {sidebarOpen && <span className="font-medium text-sm">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>}
           </Button>
         </div>
       </div>

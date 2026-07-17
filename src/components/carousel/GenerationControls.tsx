@@ -70,10 +70,8 @@ export function GenerationControls({
                  <SelectValue placeholder="Tema" />
                </SelectTrigger>
                <SelectContent className="bg-white dark:bg-[#2e2e2e]">
-                 <SelectItem value="Professional Dark">Professional Dark</SelectItem>
+                 <SelectItem value="Bold Modern">Bold Modern</SelectItem>
                  <SelectItem value="Minimalist Clean">Minimalist Clean</SelectItem>
-                 <SelectItem value="Bold Impact">Bold Impact</SelectItem>
-                 <SelectItem value="Futuristic Neon">Futuristic Neon</SelectItem>
                </SelectContent>
              </Select>
              

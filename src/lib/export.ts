@@ -8,13 +8,22 @@ import { jsPDF } from "jspdf"
 import type { Theme } from "@/lib/themes"
 import { type Slide, SlideRenderer } from "@/components/carousel/SlideRenderer"
 
-export async function renderHiddenSlideLegacy(slide: Slide, theme: Theme) {
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, taskName: string): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout: ${taskName} took too long (> ${timeoutMs}ms)`)), timeoutMs)
+    )
+  ])
+}
+
+export async function renderHiddenSlideLegacy(slide: Slide, theme: Theme, totalSlides: number) {
   const container = document.createElement("div")
   container.style.position = "absolute"
   container.style.left = "-9999px"
   container.style.top = "0"
   container.style.width = "1080px"
-  container.style.height = "1080px"
+  container.style.height = "1350px"
   container.style.background = "#ffffff"
   document.body.appendChild(container)
 
@@ -22,30 +31,41 @@ export async function renderHiddenSlideLegacy(slide: Slide, theme: Theme) {
   root.render(
     React.createElement(
       "div",
-      { className: "w-[1080px] h-[1080px] bg-white overflow-hidden" },
-      React.createElement(SlideRenderer, { slide, theme })
+      { className: "w-[1080px] h-[1350px] bg-white overflow-hidden" },
+      React.createElement(SlideRenderer, { slide, theme, totalSlides })
     )
   )
 
   await new Promise((resolve) => setTimeout(resolve, 800))
-  const canvas = await html2canvas(container, {
-    scale: 1,
-    useCORS: true,
-    backgroundColor: "#ffffff",
-    logging: false,
-  })
-  root.unmount()
-  document.body.removeChild(container)
-  return canvas
+  
+  try {
+    const canvas = await withTimeout(
+      html2canvas(container, {
+        scale: 1,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      }),
+      15000,
+      "html2canvas rendering"
+    )
+    root.unmount()
+    document.body.removeChild(container)
+    return canvas
+  } catch (error) {
+    root.unmount()
+    document.body.removeChild(container)
+    throw error
+  }
 }
 
-export async function renderHiddenSlide(slide: Slide, theme: Theme) {
+export async function renderHiddenSlide(slide: Slide, theme: Theme, totalSlides: number) {
   const container = document.createElement("div")
   container.style.position = "fixed"
   container.style.top = "0"
   container.style.left = "0"
   container.style.width = "1080px"
-  container.style.height = "1080px"
+  container.style.height = "1350px"
   container.style.opacity = "0"
   container.style.pointerEvents = "none"
   container.style.zIndex = "-1000"
@@ -56,33 +76,35 @@ export async function renderHiddenSlide(slide: Slide, theme: Theme) {
   root.render(
     React.createElement(
       "div",
-      { 
-        className: "w-[1080px] h-[1080px] bg-white overflow-hidden",
-        style: { width: '1080px', height: '1080px' }
+      {
+        className: "w-[1080px] h-[1350px] bg-white overflow-hidden",
+        style: { width: '1080px', height: '1350px' }
       },
-      React.createElement(SlideRenderer, { slide, theme })
+      React.createElement(SlideRenderer, { slide, theme, totalSlides })
     )
   )
 
-  // Tunggu hingga React selesai rendering dan font terload
   await new Promise((resolve) => setTimeout(resolve, 1200))
-  
+
   try {
-    // Pastikan konten sudah ada di dalam container sebelum capture
     if (!container.innerHTML || container.children.length === 0) {
       throw new Error("Container is empty");
     }
 
-    const canvas = await htmlToImage.toCanvas(container, {
-      width: 1080,
-      height: 1080,
-      style: {
-        opacity: '1', // Paksa opacity 1 hanya saat capture
-        visibility: 'visible',
-      },
-      pixelRatio: 1, // Maintain 1:1 scale as per original requirement
-    })
-    
+    const canvas = await withTimeout(
+      htmlToImage.toCanvas(container, {
+        width: 1080,
+        height: 1350,
+        style: {
+          opacity: '1',
+          visibility: 'visible',
+        },
+        pixelRatio: 1,
+      }),
+      15000,
+      "html-to-image rendering"
+    )
+
     root.unmount()
     document.body.removeChild(container)
     return canvas
@@ -90,7 +112,7 @@ export async function renderHiddenSlide(slide: Slide, theme: Theme) {
     console.error("Export failed, falling back to legacy", error)
     root.unmount()
     document.body.removeChild(container)
-    return await renderHiddenSlideLegacy(slide, theme)
+    return await renderHiddenSlideLegacy(slide, theme, totalSlides)
   }
 }
 
@@ -98,7 +120,7 @@ export async function exportPNG(slides: Slide[], theme: Theme, onProgress?: (p: 
   const zip = new JSZip()
   for (let i = 0; i < slides.length; i++) {
     if (onProgress) onProgress(Math.round(((i + 1) / slides.length) * 100))
-    const canvas = await renderHiddenSlide(slides[i], theme)
+    const canvas = await renderHiddenSlide(slides[i], theme, slides.length)
     const imgData = canvas.toDataURL("image/png").split(",")[1]
     zip.file(`slide-${i + 1}.png`, imgData, { base64: true })
   }
@@ -107,12 +129,12 @@ export async function exportPNG(slides: Slide[], theme: Theme, onProgress?: (p: 
 }
 
 export async function exportPDF(slides: Slide[], theme: Theme, onProgress?: (p: number) => void) {
-  const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [1080, 1080] })
+  const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [1080, 1350] })
   for (let i = 0; i < slides.length; i++) {
     if (onProgress) onProgress(Math.round(((i + 1) / slides.length) * 100))
-    const canvas = await renderHiddenSlide(slides[i], theme)
-    if (i > 0) pdf.addPage([1080, 1080])
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 1080, 1080)
+    const canvas = await renderHiddenSlide(slides[i], theme, slides.length)
+    if (i > 0) pdf.addPage([1080, 1350])
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 1080, 1350)
   }
   pdf.save("carousel.pdf")
 }

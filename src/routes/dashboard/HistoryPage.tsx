@@ -1,15 +1,16 @@
 import { useEffect, useState, useRef } from "react"
 import { getHistory, deleteCarousel } from "@/lib/db"
 import { Loader2, Trash2, X, Layout, ChevronLeft, ChevronRight, Search,
-CheckSquare, Square, MoreVertical, FileImage, FileText } from "lucide-react"
+CheckSquare, Square, MoreVertical, FileImage, FileText, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { SlideRenderer, PreviewScaleWrapper } from "@/components/carousel/SlideRenderer"
 import { type Theme } from "@/lib/themes"
 import { exportPNG, exportPDF } from "@/lib/export"
+import { parseError } from "@/lib/utils"
 
-export function HistoryPage({ 
+export function HistoryPage({
   setIsExporting, 
   setExportProgress 
 }: { 
@@ -18,8 +19,10 @@ export function HistoryPage({
 }) {
   const [history, setHistory] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedHistory, setSelectedHistory] = useState<any | null>(null)
+  const [isTitleExpanded, setIsTitleExpanded] = useState(false)
   const [activeSlideIndex, setActiveSlideIndex] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isSelectionMode, setIsSelectionMode] = useState(false)
@@ -47,17 +50,21 @@ export function HistoryPage({
 
   const fetchHistory = async () => {
     setLoading(true)
+    setError(null)
     try {
       const data = await getHistory()
       setHistory(data)
-    } catch (err) {
-      toast.error("Gagal memuat riwayat")
+    } catch (err: any) {
+      const msg = parseError(err)
+      setError(msg)
+      toast.error("Error", { description: msg })
     } finally {
       setLoading(false)
     }
   }
 
   const handleDelete = async (id: string) => {
+
     try {
       await deleteCarousel(id)
       setHistory(prev => prev.filter(item => item.id !== id))
@@ -127,6 +134,7 @@ export function HistoryPage({
 
   useEffect(() => {
     setActiveSlideIndex(0);
+    setIsTitleExpanded(false);
   }, [selectedHistory]);
 
   const filteredHistory = history.filter(item =>
@@ -134,6 +142,21 @@ export function HistoryPage({
   )
 
   if (loading) return <div className="p-20 text-center"><Loader2 className="animate-spin inline-block" /></div>
+
+  if (error) return (
+    <div className="p-20 text-center space-y-4">
+      <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto text-red-500">
+        <AlertCircle size={40} />
+      </div>
+      <div>
+        <h3 className="text-xl font-semibold">Gagal memuat riwayat</h3>
+        <p className="text-slate-500">{error}</p>
+      </div>
+      <Button onClick={fetchHistory} className="gap-2">
+        <Loader2 className={`size-4 ${loading ? "animate-spin" : ""}`} /> Coba Lagi
+      </Button>
+    </div>
+  )
 
   return (
     <div className="w-full py-4 px-6">
@@ -223,10 +246,16 @@ export function HistoryPage({
 
       {selectedHistory && (
         <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedHistory(null)}>
-          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl p-0 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e =>
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-0 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e =>
           e.stopPropagation()}>
-            <div className="flex justify-between items-center px-6 py-2">
-              <h3 className="text-lg font-bold truncate mr-13">{selectedHistory.topic}</h3>
+            <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 flex justify-between items-start px-6 py-2">
+              <h3
+                className={`text-lg font-bold mr-13 cursor-pointer transition-all ${isTitleExpanded ? '' : 'truncate'}`}
+                onClick={() => setIsTitleExpanded(!isTitleExpanded)}
+                title={isTitleExpanded ? "" : "Klik untuk melihat judul lengkap"}
+              >
+                {selectedHistory.topic}
+              </h3>
               <div className="flex gap-2 shrink-0">
                 <Button variant="ghost" size="icon" onClick={() => handleDelete(selectedHistory.id)} className="text-destructive">
                   <Trash2 size={18} />
@@ -245,12 +274,13 @@ export function HistoryPage({
                 if (!currentSlide) return null;
 
                 return (
-                  <div className="relative flex items-center justify-center overflow-hidden min-h-[300px] border-y border-slate-200 dark:border-slate-700 bg-slate-100">
-                    <div className="w-full aspect-square flex items-center justify-center">
-                      <PreviewScaleWrapper width={500}>
-                        <SlideRenderer 
-                          slide={currentSlide} 
-                          theme={theme} 
+                  <div className="relative flex items-center justify-center overflow-hidden min-h-[400px] border-y border-slate-200 dark:border-slate-700 bg-slate-100">
+                    <div className="w-full aspect-[4/5] flex items-center justify-center">
+                      <PreviewScaleWrapper width={384}>
+                        <SlideRenderer
+                          slide={currentSlide}
+                          theme={theme}
+                          totalSlides={slides.length}
                         />
                       </PreviewScaleWrapper>
                     </div>

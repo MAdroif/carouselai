@@ -1,16 +1,13 @@
 import type { Theme } from "@/lib/themes"
 import { PRESET_THEMES } from "@/lib/themes"
-import {
-  Sparkles, ArrowDown, Brain, TrendingUp, Network, AlertTriangle,
-  CheckCircle2, Rocket, Users, Lightbulb, Target, Zap, Copy, Bot,
-  ShieldAlert, Clock, Server, Link2, Play, Terminal
-} from "lucide-react"
+import * as LucideIcons from "lucide-react"
 
 export type Composition = {
   alignment: "center" | "left" | "right"
   focus: "headline" | "body" | "balanced"
   style: "floating" | "minimalist" | "bold" | "card-grid" | "card-flow"
   accent: "pill" | "line" | "none" | "bold-serif" | "clean-sans"
+  aspectRatio: "4:5"
 }
 
 export interface CardItem {
@@ -39,6 +36,7 @@ const DEFAULT_COMPOSITION: Composition = {
   focus: "balanced",
   style: "minimalist",
   accent: "none",
+  aspectRatio: "4:5",
 }
 
 function resolveComposition(composition: any): Composition {
@@ -48,6 +46,7 @@ function resolveComposition(composition: any): Composition {
   const validFocus = ["headline", "body", "balanced"]
   const validStyles = ["floating", "minimalist", "bold", "card-grid", "card-flow"]
   const validAccents = ["pill", "line", "none", "bold-serif", "clean-sans"]
+  const validRatios = ["4:5"]
 
   let alignment = composition.alignment
   if (typeof alignment === "string") {
@@ -61,6 +60,7 @@ function resolveComposition(composition: any): Composition {
     focus: validFocus.includes(composition.focus) ? composition.focus : DEFAULT_COMPOSITION.focus,
     style: validStyles.includes(composition.style) ? composition.style : DEFAULT_COMPOSITION.style,
     accent: validAccents.includes(composition.accent) ? composition.accent : DEFAULT_COMPOSITION.accent,
+    aspectRatio: validRatios.includes(composition.aspectRatio) ? composition.aspectRatio : DEFAULT_COMPOSITION.aspectRatio,
   }
 }
 
@@ -76,10 +76,10 @@ function getFontSize(text: string, max: number, min: number): string {
   const len = text.length
   if (len === 0) return `${min}px`
 
-  if (len < 30) return `${max}px`
-  if (len > 150) return `${min}px`
-  const k = 0.015
-  const size = min + (max - min) * Math.exp(-k * (len - 30))
+  if (len < 10) return `${max}px`
+  if (len > 100) return `${min}px`
+  const k = 0.008
+  const size = min + (max - min) * Math.exp(-k * (len - 10))
   return `${Math.round(size)}px`
 }
 
@@ -133,26 +133,12 @@ function HighlightedText({ text, highlights, color, bg, highlightTextColor }: { 
   )
 }
 
-const ICON_MAP: Record<string, React.ComponentType<any>> = {
-  "copy-paste": Copy, "robot-vibe": Bot, "trust-drop": ShieldAlert,
-  brain: Brain, otak: Brain, mindset: Brain,
-  growth: TrendingUp, kemajuan: TrendingUp,
-  network: Network, koneksi: Network,
-  warning: AlertTriangle, risiko: AlertTriangle,
-  solution: CheckCircle2, solusi: CheckCircle2, checklist: CheckCircle2,
-  startup: Rocket, cepat: Rocket, launch: Rocket,
-  audience: Users, orang: Users, user: Users,
-  idea: Lightbulb, ide: Lightbulb,
-  goal: Target, tujuan: Target,
-  power: Zap, efisiensi: Zap,
-  time: Clock, waktu: Clock,
-  server: Server, koneksi2: Link2,
-  action: Play, terminal: Terminal,
-}
-
 function resolveIcon(keyword?: string) {
-  const key = keyword?.toLowerCase().trim() || ""
-  return ICON_MAP[key] || Sparkles
+  const key = keyword?.trim() || ""
+  // Mencari ikon di LucideIcons. Karena Lucide menggunakan PascalCase (contoh: "Brain", "Rocket"),
+  // kita mencoba mencari key secara langsung.
+  const Icon = (LucideIcons as any)[key]
+  return Icon || LucideIcons.Sparkles
 }
 
 function ItemCard({ item, theme }: { item: CardItem; theme: Theme }) {
@@ -161,20 +147,21 @@ function ItemCard({ item, theme }: { item: CardItem; theme: Theme }) {
     <div style={{
       display: "flex", alignItems: "flex-start", gap: "20px",
       backgroundColor: theme.bgAlt, border: `1px solid ${theme.accent}33`,
-      borderRadius: "20px", padding: "28px", width: "100%", boxSizing: "border-box",
+      borderRadius: "20px", padding: "28px", width: "100%", maxWidth: "430px", boxSizing: "border-box",
+      position: "relative",
     }}>
       <div style={{
         width: "56px", height: "56px", minWidth: "56px", borderRadius: "14px",
         backgroundColor: `${theme.accent}22`, display: "flex",
         alignItems: "center", justifyContent: "center",
       }}>
-        <Icon size={28} color={theme.accent} strokeWidth={1.75} />
+        <Icon size={35} color={theme.accent} strokeWidth={2} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "6px", textAlign: "left" }}>
-        <h3 style={{ margin: 0, fontSize: "28px", fontWeight: 700, color: theme.text, lineHeight: 1.25 }}>
+        <h3 style={{ margin: 0, fontSize: getFontSize(item.item_title, 34, 28), fontWeight: 700, color: theme.text, lineHeight: 1.25 }}>
           {item.item_title}
         </h3>
-        <p style={{ margin: 0, fontSize: "22px", color: theme.textMuted, lineHeight: 1.4 }}>
+        <p style={{ margin: 0, fontSize: getFontSize(item.item_description, 32, 20), color: theme.textMuted, lineHeight: 1.4 }}>
           {item.item_description}
         </p>
       </div>
@@ -182,14 +169,18 @@ function ItemCard({ item, theme }: { item: CardItem; theme: Theme }) {
   )
 }
 
-function CardFlowLayout({ items, theme }: { items: CardItem[]; theme: Theme }) {
+function CardFlowLayout({ items, theme, alignment }: { items: CardItem[]; theme: Theme; alignment: string }) {
+  const justify = alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end"
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "18px", width: "100%" }}>
+    <div style={{
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "24px",
+      width: "100%",
+      justifyContent: justify
+    }}>
       {items.map((item, i) => (
-        <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "18px" }}>
-          <ItemCard item={item} theme={theme} />
-          {i < items.length - 1 && <ArrowDown size={26} color={theme.textMuted} strokeWidth={2} />}
-        </div>
+        <ItemCard key={i} item={item} theme={theme} />
       ))}
     </div>
   )
@@ -203,12 +194,21 @@ function CardGridLayout({ items, theme }: { items: CardItem[]; theme: Theme }) {
   )
 }
 
-function AdaptiveLayout({ slide, theme: externalTheme }: { slide: Slide; theme: Theme }) {
+function AdaptiveLayout({ slide, theme: externalTheme, totalSlides }: { slide: Slide; theme: Theme; totalSlides: number }) {
   const theme = resolveTheme(externalTheme)
   const composition = resolveComposition(slide.composition)
   const { alignment, focus, accent } = composition
-  const { svg_code, highlight_bg } = slide
-  const canvasPadding = "69px"
+  const { highlight_bg } = slide
+  const themeSvg = theme.svg_code
+  const canvasPadding = "80px"
+  const canvasHeight = "1350px"
+  const contentHeight = "1212px"
+
+  // Hitung warna highlight final agar konsisten antara counter dan teks body
+  const bgLum = getLuminance(theme.bg);
+  const hbgLum = getLuminance(highlight_bg);
+  const isTooSimilar = highlight_bg && Math.abs(bgLum - hbgLum) < 0.15;
+  const finalHighlightBg = (highlight_bg && isTooSimilar) ? theme.accent : (highlight_bg || theme.accent);
 
   const alignmentStyles = {
     center: { justifyContent: "center", alignItems: "center", textAlign: "center" as const },
@@ -217,9 +217,9 @@ function AdaptiveLayout({ slide, theme: externalTheme }: { slide: Slide; theme: 
   }
 
   const focusStyles: Record<string, any> = {
-    headline: { titleMax: 80, titleMin: 40, bodyMax: 32, bodyMin: 20 },
-    body: { titleMax: 44, titleMin: 26, bodyMax: 44, bodyMin: 26 },
-    balanced: { titleMax: 60, titleMin: 32, bodyMax: 34, bodyMin: 22 },
+    headline: { titleMax: 75, titleMin: 30, bodyMax: 45, bodyMin: 35 },
+    body: { titleMax: 65, titleMin: 30, bodyMax: 45, bodyMin: 34 },
+    balanced: { titleMax: 65, titleMin: 32, bodyMax: 45, bodyMin: 34 },
   }
 
   const currentFocus = focusStyles[focus] || focusStyles.balanced
@@ -229,11 +229,17 @@ function AdaptiveLayout({ slide, theme: externalTheme }: { slide: Slide; theme: 
     accent === "clean-sans" ? "line" :
     accent;
 
+  // Logika posisi SVG diagonal berpasangan berdasarkan nomor slide
+  const isEven = slide.slide % 2 === 0;
+  const svgPositions = isEven
+    ? [ { top: -90, right: -170 }, { bottom: -90, left: -170 } ]
+    : [ { top: -90, left: -170 }, { bottom: -90, right: -170 } ];
+
   return (
     <div style={{
       backgroundColor: theme.bg,
       width: "1080px",
-      height: "1080px",
+      height: canvasHeight,
       fontFamily: '"Plus Jakarta Sans", sans-serif',
       boxSizing: "border-box",
       display: "flex",
@@ -243,7 +249,25 @@ function AdaptiveLayout({ slide, theme: externalTheme }: { slide: Slide; theme: 
       overflow: "hidden",
       padding: canvasPadding,
     }}>
-      {svg_code && (
+      {themeSvg && svgPositions.map((pos, i) => (
+        <div key={i} style={{
+          position: "absolute",
+          width: "500px",
+          height: "500px",
+          zIndex: 0,
+          opacity: 1,
+          color: theme.accent,
+          pointerEvents: "none",
+          ...pos
+        }}>
+          <div
+            style={{ width: "100%", height: "100%" }}
+            dangerouslySetInnerHTML={{ __html: themeSvg }}
+          />
+        </div>
+      ))}
+      {/* SVG per-slide tetap dipertahankan sebagai fallback atau layer tambahan jika ada */}
+      {slide.svg_code && (
         <div style={{
           position: "absolute",
           top: 0,
@@ -251,24 +275,24 @@ function AdaptiveLayout({ slide, theme: externalTheme }: { slide: Slide; theme: 
           width: "100%",
           height: "100%",
           zIndex: 0,
-          opacity: 0.5,
+          opacity: 1,
           color: theme.accent,
           pointerEvents: "none",
         }}>
           <div
             style={{ width: "100%", height: "100%" }}
-            dangerouslySetInnerHTML={{ __html: svg_code }}
+            dangerouslySetInnerHTML={{ __html: slide.svg_code }}
           />
         </div>
       )}
 
       <div style={{
         width: "960px",
-        height: "960px",
+        height: contentHeight,
         display: "flex",
         flexDirection: "column",
         position: "relative",
-        zIndex: 1,
+        zIndex: 10,
         boxSizing: "border-box",
         ...alignmentStyles[alignment],
       }}>
@@ -280,33 +304,44 @@ function AdaptiveLayout({ slide, theme: externalTheme }: { slide: Slide; theme: 
           justifyContent: "center",
           gap: "30px",
           position: "relative",
-          zIndex: 1,
+          zIndex: 20,
         }}>
+          {slide.slide > 1 && slide.slide < totalSlides && (
+            <div style={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              marginTop: "-80px",
+              marginBottom: "50px"
+            }}>
+              <div style={{
+                width: "120px",
+                height: "120px",
+                borderRadius: "50%",
+                backgroundColor: finalHighlightBg,
+                color: getContrastColor(finalHighlightBg),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "70px",
+                fontWeight: 800,
+                boxShadow: `0 4px 12px ${theme.accent}44`,
+              }}>
+                {slide.slide - 1}
+              </div>
+            </div>
+          )}
           <div style={{
             width: "100%",
             display: "flex",
             justifyContent: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end"
           }}>
-            {resolvedAccent === "pill" ? (
-              <div style={{
-                backgroundColor: theme.bgAlt, padding: "12px 24px", borderRadius: "100px",
-                border: `2px solid ${theme.accent}44`, display: "inline-block"
-              }}>
-                <h2 style={{
-                  fontSize: getFontSize(slide.title, currentFocus.titleMax, currentFocus.titleMin),
-                  fontWeight: theme.fontWeight, color: theme.text, margin: 0, lineHeight: 1.2
-                }}>
-                  {slide.title}
-                </h2>
-              </div>
-            ) : (
-              <h2 style={{
-                fontSize: getFontSize(slide.title, currentFocus.titleMax, currentFocus.titleMin),
-                fontWeight: theme.fontWeight, color: theme.text, margin: 0, lineHeight: 1.2
-              }}>
-                {slide.title}
-              </h2>
-            )}
+            <h2 style={{
+              fontSize: getFontSize(slide.title, currentFocus.titleMax, currentFocus.titleMin),
+              fontWeight: theme.fontWeight, color: theme.text, margin: 0, lineHeight: 1.2
+            }}>
+              {slide.title}
+            </h2>
           </div>
 
           {resolvedAccent === "line" && (
@@ -323,7 +358,7 @@ function AdaptiveLayout({ slide, theme: externalTheme }: { slide: Slide; theme: 
             composition.style === "card-grid" ? (
               <CardGridLayout items={slide.items} theme={theme} />
             ) : (
-              <CardFlowLayout items={slide.items} theme={theme} />
+              <CardFlowLayout items={slide.items} theme={theme} alignment={alignment} />
             )
           ) : (
             <div style={{
@@ -335,22 +370,36 @@ function AdaptiveLayout({ slide, theme: externalTheme }: { slide: Slide; theme: 
                 fontSize: getFontSize(slide.body_text, currentFocus.bodyMax, currentFocus.bodyMin),
                 color: theme.text, lineHeight: 1.6, margin: 0, maxWidth: "75%"
               }}>
-                {(() => {
-                  const bgLum = getLuminance(theme.bg);
-                  const hbgLum = getLuminance(highlight_bg);
-                  const isTooSimilar = Math.abs(bgLum - hbgLum) < 0.15;
-                  const finalHighlightBg = (highlight_bg && isTooSimilar) ? theme.accent : highlight_bg;
-                  return (
-                    <HighlightedText
-                      text={slide.body_text}
-                      highlights={slide.highlights}
-                      color={theme.text}
-                      bg={finalHighlightBg}
-                      highlightTextColor={getContrastColor(finalHighlightBg)}
-                    />
-                  );
-                })()}
+                <HighlightedText
+                  text={slide.body_text}
+                  highlights={slide.highlights}
+                  color={theme.text}
+                  bg={finalHighlightBg}
+                  highlightTextColor={getContrastColor(finalHighlightBg)}
+                />
               </p>
+            </div>
+          )}
+
+          {slide.slide === 1 && (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              backgroundColor: finalHighlightBg,
+              color: getContrastColor(finalHighlightBg),
+              padding: "10px 20px",
+              borderRadius: "100px",
+              border: `1px solid ${theme.accent}44`,
+              fontSize: "25px",
+              fontWeight: 600,
+              zIndex: 50,
+              boxShadow: `0 4px 12px ${theme.accent}22`,
+              alignSelf: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end",
+              marginTop: "20px"
+            }}>
+              <span>Geser</span>
+              <LucideIcons.ChevronRight size={30} color={getContrastColor(finalHighlightBg)} strokeWidth={2.5} />
             </div>
           )}
         </div>
@@ -366,16 +415,17 @@ export function PreviewScaleWrapper({
   width: number
 }) {
   const scale = width / 1080
+  const height = width * (1350 / 1080)
   return (
     <div style={{
       width: `${width}px`,
-      height: `${width}px`,
+      height: `${height}px`,
       position: "relative",
       overflow: "hidden"
     }}>
       <div style={{
         width: "1080px",
-        height: "1080px",
+        height: "1350px",
         transform: `scale(${scale})`,
         transformOrigin: "top left",
         pointerEvents: "none"
@@ -386,7 +436,7 @@ export function PreviewScaleWrapper({
   )
 }
 
-export function SlideRenderer({ slide, theme: externalTheme }: { slide: Slide; theme?: Theme }) {
+export function SlideRenderer({ slide, theme: externalTheme, totalSlides }: { slide: Slide; theme?: Theme; totalSlides: number }) {
   const activeTheme = resolveTheme(externalTheme || slide.theme);
-  return <AdaptiveLayout slide={slide} theme={activeTheme} />
+  return <AdaptiveLayout slide={slide} theme={activeTheme} totalSlides={totalSlides} />
 }

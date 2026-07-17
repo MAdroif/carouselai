@@ -1,9 +1,12 @@
 import { supabase } from './supabase'
+import { toast } from "sonner"
 
 // Helper untuk menampilkan error di UI
 const handleError = (error: any) => {
   const message = error?.message || "Terjadi kesalahan yang tidak diketahui"
-  alert(`Error: ${message}`) // Debugging langsung ke layar
+  toast.error("Autentikasi Gagal", {
+    description: message
+  })
   throw error
 }
 
@@ -34,7 +37,9 @@ export async function signInWithGoogle() {
     },
   })
   if (error) {
-    alert("Google Auth Error: " + error.message)
+    toast.error("Google Auth Error", {
+      description: error.message
+    })
     return null
   }
   return data

@@ -32,7 +32,7 @@ const ExportProgressOverlay = memo(({ progress }: { progress: number }) => (
 ))
 ExportProgressOverlay.displayName = "ExportProgressOverlay"
 
-function AppLayout({ children, sidebarOpen, setSidebarOpen, tokens, user, darkMode, setDarkMode }: any) {
+function AppLayout({ children, sidebarOpen, setSidebarOpen, tokens, user }: any) {
   const location = useLocation();
   const isPricingPage = location.pathname === '/pricing';
   const isAuthPage = location.pathname === '/auth';
@@ -52,8 +52,6 @@ function AppLayout({ children, sidebarOpen, setSidebarOpen, tokens, user, darkMo
             currentPage={location.pathname}
             tokens={tokens}
             user={user}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
           />
         </div>
       )}
@@ -75,23 +73,20 @@ export default function App() {
   const [user, setUser] = useState<any>(null)
   const [loadingUser, setLoadingUser] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [darkMode, setDarkMode] = useState(false)
-  const [userTokens, setUserTokens] = useState<number>(0)
+  const [userTokens, setUserTokens] = useState<number | null>(null)
   const [isExportingHistory, setIsExportingHistory] = useState(false)
   const [exportHistoryProgress, setExportHistoryProgress] = useState(0)
 
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-  }, [darkMode])
-
   const fetchTokens = async () => {
     if (!user || typeof user !== 'object' || !user.id) return
-    const { data } = await supabase.from('profiles').select('tokens').eq('id', user.id).single()
-    if (data) setUserTokens(data.tokens)
+    try {
+      const { data, error } = await supabase.from('profiles').select('tokens').eq('id', user.id).single()
+      if (error) throw error
+      if (data) setUserTokens(data.tokens)
+    } catch (error) {
+      console.error("Failed to fetch tokens:", error)
+      setUserTokens(null)
+    }
   }
 
   useEffect(() => {
@@ -122,14 +117,12 @@ export default function App() {
           setSidebarOpen={setSidebarOpen}
           tokens={userTokens}
           user={user}
-          darkMode={darkMode}
-          setDarkMode={setDarkMode}
         >
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/app" element={
               user ? (
-                <GeneratorPage userTokens={userTokens} onTokensChange={fetchTokens} />
+                <GeneratorPage userTokens={userTokens ?? 0} onTokensChange={fetchTokens} />
               ) : (
                 <Navigate to="/auth" />
               )

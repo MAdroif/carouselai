@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { signUp, signInWithGoogle } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
-import { Sparkles, Eye, EyeOff } from "lucide-react"
+import { Sparkles, Eye, EyeOff, Loader2 } from "lucide-react"
 import { toast, Toaster } from "sonner"
 
 const GoogleIcon = () => (
@@ -24,6 +24,7 @@ export default function AuthPage({ onAuthSuccess }: { onAuthSuccess: () => void 
   const [username, setUsername] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -111,9 +112,28 @@ export default function AuthPage({ onAuthSuccess }: { onAuthSuccess: () => void 
                   <span className="bg-white px-2 text-slate-400">Atau lanjut dengan</span>
                 </div>
               </div>
-              <Button type="button" variant="outline" className="w-full" onClick={signInWithGoogle}>
-                <GoogleIcon />
-                Google
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={googleLoading || loading}
+                onClick={async () => {
+                  setGoogleLoading(true)
+                  try {
+                    await signInWithGoogle()
+                  } catch (error) {
+                    console.error(error)
+                  } finally {
+                    setGoogleLoading(false)
+                  }
+                }}
+              >
+                {googleLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <GoogleIcon />
+                )}
+                {googleLoading ? "Menghubungkan..." : "Google"}
               </Button>
             </form>
             <p className="text-center text-sm">

@@ -1,16 +1,17 @@
 import { supabase } from './supabase'
 
 export async function saveCarousel(topic: string, content: any) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error("User tidak ditemukan")
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw authError
+  if (!authData?.user) throw new Error("User tidak ditemukan")
 
   const { data, error } = await supabase
     .from('history_carousels')
     .insert([
-      { 
-        user_id: user.id, 
-        topic, 
-        content 
+      {
+        user_id: authData.user.id,
+        topic,
+        content
       }
     ])
 
@@ -19,13 +20,14 @@ export async function saveCarousel(topic: string, content: any) {
 }
 
 export async function getHistory() {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error("User tidak ditemukan")
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw authError
+  if (!authData?.user) throw new Error("User tidak ditemukan")
 
   const { data, error } = await supabase
     .from('history_carousels')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', authData.user.id)
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -42,13 +44,14 @@ export async function deleteCarousel(id: string) {
 }
 
 export async function clearAllHistory() {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error("User tidak ditemukan")
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw authError
+  if (!authData?.user) throw new Error("User tidak ditemukan")
 
   const { error } = await supabase
     .from('history_carousels')
     .delete()
-    .eq('user_id', user.id)
+    .eq('user_id', authData.user.id)
 
   if (error) throw error
 }
