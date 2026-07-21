@@ -17,6 +17,9 @@ interface SidebarProps {
 export function Sidebar({ sidebarOpen, setSidebarOpen, currentPage, tokens, user }: SidebarProps) {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme()
+  const ADMIN_EMAIL = "dataframe777@gmail.com"
+
+  const isAuthorizedAdmin = user?.email === ADMIN_EMAIL
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark')
@@ -48,6 +51,16 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, currentPage, tokens, user
           >
             <History size={24} /> {sidebarOpen && <span className="font-medium">History</span>}
           </Button>
+          
+          {isAuthorizedAdmin && (
+            <Button
+              variant={currentPage === '/admin' ? 'secondary' : 'ghost'}
+              onClick={() => navigate('/admin')}
+              className={`w-full h-12 flex ${sidebarOpen ? "justify-start gap-4 px-4" : "justify-center px-0"}`}
+            >
+              <Shield size={24} /> {sidebarOpen && <span className="font-medium">Admin</span>}
+            </Button>
+          )}
         </nav>
 
         <div className="mt-auto p-2 border-t dark:border-[#2e2e2e] space-y-1 shrink-0">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { saveCarousel } from "@/lib/db"
+import { trackEvent } from "@/lib/trackerEvent"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { SlideRenderer, PreviewScaleWrapper, type Slide } from "@/components/carousel/SlideRenderer"
@@ -67,6 +68,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     if (!topic.trim()) return
     setLoading(true)
     setSlides([])
+    trackEvent('carousel_generation_started', { slide_count: slideCount })  // tambahan ini
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const { data, error } = await supabase.functions.invoke('generate-carousel', {
@@ -81,6 +83,10 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
       setSelectedTheme(data.theme)
       await saveCarousel(topic, data)
       onTokensChange()
+      trackEvent('carousel_generation_completed', {
+        style: data.theme,
+        slide_count: slideCount,
+      })
     } catch (error: any) {
       console.error(error)
       const errorMessage = parseError(error)
@@ -98,6 +104,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     try {
       await exportPNG(slides, selectedTheme, setExportingPNGProgress)
       toast.success("Berhasil export PNG")
+      trackEvent('carousel_downloaded', { format: 'png', slide_count: slides.length }) // tracker event
     } catch (error) {
       toast.error("Gagal export PNG")
     } finally {
@@ -111,6 +118,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     try {
       await exportPDF(slides, selectedTheme, setExportingPDFProgress)
       toast.success("Berhasil export PDF")
+      trackEvent('carousel_downloaded', { format: 'pdf', slide_count: slides.length }) // tracker event
     } catch (error) {
       toast.error("Gagal export PDF")
     } finally {

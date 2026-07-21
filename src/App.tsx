@@ -10,6 +10,7 @@ import { HistoryPage } from "@/routes/dashboard/HistoryPage"
 import { PricingPage } from "@/components/PricingPage"
 import GeneratorPage from "@/routes/generator/GeneratorPage"
 import LandingPage from "@/routes/landing/LandingPage"
+import AdminDashboard from "@/pages/AdminDashboard"
 
 const ExportProgressOverlay = memo(({ progress }: { progress: number }) => (
   <div className="fixed inset-0 z-[1000] bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-6">
@@ -146,6 +147,13 @@ export default function App() {
             } />
             <Route path="/pricing" element={
               <PricingPage onSelectTier={handleSelectTier} />
+            } />
+            <Route path="/admin" element={
+              user ? (
+                <AdminDashboard />
+              ) : (
+                <Navigate to="/auth" />
+              )
             } />
           </Routes>
         </AppLayout>

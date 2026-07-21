@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { toast } from "sonner"
+import { trackEvent } from './trackerEvent'
 
 // Helper untuk menampilkan error di UI
 const handleError = (error: any) => {
@@ -11,10 +12,15 @@ const handleError = (error: any) => {
 }
 
 export async function signUp(email: string, password: string) {
-  return await supabase.auth.signUp({
+  const result = await supabase.auth.signUp({
     email,
     password,
   })
+
+  if (!result.error) {
+    trackEvent('signup_completed', { method: 'email' })
+  }
+  return result
 }
 
 export async function signIn(email: string, password: string) {
