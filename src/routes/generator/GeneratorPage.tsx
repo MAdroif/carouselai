@@ -174,11 +174,6 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     handle: resolvedHandle,
     website: brandSettings?.website_url || "",
   }
-  useEffect(() => {
-    toast.info("Debug brand identity", {
-      description: `email: "${userEmail}" | handle: "${resolvedHandle}" | brandSettings: ${JSON.stringify(brandSettings)}`,
-    })
-  }, [userEmail, brandSettings])
 
   return (
     <div className="relative">
