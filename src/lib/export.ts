@@ -6,7 +6,7 @@ import JSZip from "jszip"
 import { saveAs } from "file-saver"
 import { jsPDF } from "jspdf"
 import type { Theme } from "@/lib/themes"
-import { type Slide, SlideRenderer } from "@/components/carousel/SlideRenderer"
+import { type Slide, SlideRenderer, type BrandIdentity } from "@/components/carousel/SlideRenderer"
 
 const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, taskName: string): Promise<T> => {
   return Promise.race([
@@ -17,7 +17,7 @@ const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, taskName: string
   ])
 }
 
-export async function renderHiddenSlideLegacy(slide: Slide, theme: Theme, totalSlides: number) {
+export async function renderHiddenSlideLegacy(slide: Slide, theme: Theme, totalSlides: number, brandIdentity?: BrandIdentity, signal?: AbortSignal) {
   const container = document.createElement("div")
   container.style.position = "absolute"
   container.style.left = "-9999px"
@@ -32,12 +32,12 @@ export async function renderHiddenSlideLegacy(slide: Slide, theme: Theme, totalS
     React.createElement(
       "div",
       { className: "w-[1080px] h-[1350px] bg-white overflow-hidden" },
-      React.createElement(SlideRenderer, { slide, theme, totalSlides })
+      React.createElement(SlideRenderer, { slide, theme, totalSlides, brandIdentity })
     )
   )
 
   await new Promise((resolve) => setTimeout(resolve, 800))
-  
+
   try {
     const canvas = await withTimeout(
       html2canvas(container, {
@@ -49,6 +49,12 @@ export async function renderHiddenSlideLegacy(slide: Slide, theme: Theme, totalS
       15000,
       "html2canvas rendering"
     )
+    if (signal?.aborted) {
+      root.unmount()
+      document.body.removeChild(container)
+      throw new Error("Aborted")
+    }
+
     root.unmount()
     document.body.removeChild(container)
     return canvas
@@ -59,7 +65,7 @@ export async function renderHiddenSlideLegacy(slide: Slide, theme: Theme, totalS
   }
 }
 
-export async function renderHiddenSlide(slide: Slide, theme: Theme, totalSlides: number) {
+export async function renderHiddenSlide(slide: Slide, theme: Theme, totalSlides: number, brandIdentity?: BrandIdentity, signal?: AbortSignal) {
   const container = document.createElement("div")
   container.style.position = "fixed"
   container.style.top = "0"
@@ -80,11 +86,13 @@ export async function renderHiddenSlide(slide: Slide, theme: Theme, totalSlides:
         className: "w-[1080px] h-[1350px] bg-white overflow-hidden",
         style: { width: '1080px', height: '1350px' }
       },
-      React.createElement(SlideRenderer, { slide, theme, totalSlides })
+      React.createElement(SlideRenderer, { slide, theme, totalSlides, brandIdentity })
     )
   )
 
-  await new Promise((resolve) => setTimeout(resolve, 1200))
+  if (signal?.aborted) throw new Error("Aborted");
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  if (signal?.aborted) throw new Error("Aborted");
 
   try {
     if (!container.innerHTML || container.children.length === 0) {
@@ -105,6 +113,12 @@ export async function renderHiddenSlide(slide: Slide, theme: Theme, totalSlides:
       "html-to-image rendering"
     )
 
+    if (signal?.aborted) {
+      root.unmount()
+      document.body.removeChild(container)
+      throw new Error("Aborted")
+    }
+
     root.unmount()
     document.body.removeChild(container)
     return canvas
@@ -112,15 +126,16 @@ export async function renderHiddenSlide(slide: Slide, theme: Theme, totalSlides:
     console.error("Export failed, falling back to legacy", error)
     root.unmount()
     document.body.removeChild(container)
-    return await renderHiddenSlideLegacy(slide, theme, totalSlides)
+    return await renderHiddenSlideLegacy(slide, theme, totalSlides, brandIdentity, signal)
   }
 }
 
-export async function exportPNG(slides: Slide[], theme: Theme, onProgress?: (p: number) => void) {
+export async function exportPNG(slides: Slide[], theme: Theme, brandIdentity: BrandIdentity, onProgress?: (p: number) => void, signal?: AbortSignal) {
   const zip = new JSZip()
   for (let i = 0; i < slides.length; i++) {
+    if (signal?.aborted) throw new Error("Aborted")
     if (onProgress) onProgress(Math.round(((i + 1) / slides.length) * 100))
-    const canvas = await renderHiddenSlide(slides[i], theme, slides.length)
+    const canvas = await renderHiddenSlide(slides[i], theme, slides.length, brandIdentity, signal)
     const imgData = canvas.toDataURL("image/png").split(",")[1]
     zip.file(`slide-${i + 1}.png`, imgData, { base64: true })
   }
@@ -128,11 +143,12 @@ export async function exportPNG(slides: Slide[], theme: Theme, onProgress?: (p: 
   saveAs(content, "slides.zip")
 }
 
-export async function exportPDF(slides: Slide[], theme: Theme, onProgress?: (p: number) => void) {
+export async function exportPDF(slides: Slide[], theme: Theme, brandIdentity: BrandIdentity, onProgress?: (p: number) => void, signal?: AbortSignal) {
   const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [1080, 1350] })
   for (let i = 0; i < slides.length; i++) {
+    if (signal?.aborted) throw new Error("Aborted")
     if (onProgress) onProgress(Math.round(((i + 1) / slides.length) * 100))
-    const canvas = await renderHiddenSlide(slides[i], theme, slides.length)
+    const canvas = await renderHiddenSlide(slides[i], theme, slides.length, brandIdentity, signal)
     if (i > 0) pdf.addPage([1080, 1350])
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 1080, 1350)
   }

@@ -12,7 +12,7 @@ import GeneratorPage from "@/routes/generator/GeneratorPage"
 import LandingPage from "@/routes/landing/LandingPage"
 import AdminDashboard from "@/pages/AdminDashboard"
 
-const ExportProgressOverlay = memo(({ progress }: { progress: number }) => (
+const ExportProgressOverlay = memo(({ progress, onCancel }: { progress: number; onCancel: () => void }) => (
   <div className="fixed inset-0 z-[1000] bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-6">
     <div className="flex flex-col items-center gap-4 max-w-xs w-full text-center">
       <div className="space-y-2">
@@ -28,6 +28,12 @@ const ExportProgressOverlay = memo(({ progress }: { progress: number }) => (
       <span className="text-xs font-mono font-medium text-slate-400">
         {progress}% Selesai
       </span>
+      <button 
+        onClick={onCancel}
+        className="mt-4 px-6 py-2 bg-red-500 text-white rounded-full text-sm font-medium hover:bg-red-600 transition-colors"
+      >
+        Batal
+      </button>
     </div>
   </div>
 ))
@@ -75,8 +81,6 @@ export default function App() {
   const [loadingUser, setLoadingUser] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [userTokens, setUserTokens] = useState<number | null>(null)
-  const [isExportingHistory, setIsExportingHistory] = useState(false)
-  const [exportHistoryProgress, setExportHistoryProgress] = useState(0)
 
   const fetchTokens = async () => {
     if (!user || typeof user !== 'object' || !user.id) return
@@ -137,10 +141,7 @@ export default function App() {
             } />
             <Route path="/app/history" element={
               user ? (
-                <HistoryPage
-                  setIsExporting={setIsExportingHistory}
-                  setExportProgress={setExportHistoryProgress}
-                />
+                <HistoryPage/>
               ) : (
                 <Navigate to="/auth" />
               )
@@ -158,9 +159,7 @@ export default function App() {
           </Routes>
         </AppLayout>
 
-        {isExportingHistory && (
-          <ExportProgressOverlay progress={exportHistoryProgress} />
-        )}
+        
       </div>
     </BrowserRouter>
   )

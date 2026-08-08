@@ -55,3 +55,40 @@ export async function clearAllHistory() {
 
   if (error) throw error
 }
+
+export async function getBrandSettings() {
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw authError
+  if (!authData?.user) throw new Error("User tidak ditemukan")
+
+  const { data, error } = await supabase
+    .from('user_brand_settings')
+    .select('*')
+    .eq('user_id', authData.user.id)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+export async function upsertBrandSettings(displayHandle: string, websiteUrl: string) {
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw authError
+  if (!authData?.user) throw new Error("User tidak ditemukan")
+
+  const { error } = await supabase
+    .from('user_brand_settings')
+    .upsert({
+      user_id: authData.user.id,
+      display_handle: displayHandle,
+      website_url: websiteUrl,
+      updated_at: new Date().toISOString(),
+    })
+
+  if (error) throw error
+}
+
+export async function getCurrentUserEmail() {
+  const { data } = await supabase.auth.getUser()
+  return data?.user?.email || ""
+}

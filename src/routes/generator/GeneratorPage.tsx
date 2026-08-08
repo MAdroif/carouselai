@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
-import { saveCarousel } from "@/lib/db"
+import { saveCarousel, getBrandSettings, getCurrentUserEmail } from "@/lib/db"
+import { deriveDefaultHandle } from "@/lib/brandDefaults"
 import { trackEvent } from "@/lib/trackerEvent"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -8,10 +9,10 @@ import { SlideRenderer, PreviewScaleWrapper, type Slide } from "@/components/car
 import { GenerationControls } from "@/components/carousel/GenerationControls"
 import { PRESET_THEMES, type Theme } from "@/lib/themes"
 import { exportPNG, exportPDF } from "@/lib/export"
-import { ImageIcon, FileText, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
+import { ImageIcon, FileText, ChevronLeft, ChevronRight } from "lucide-react"
 import { parseError } from "@/lib/utils"
 
-function SlidePreview({ slide, theme, totalSlides, onClick }: { slide: Slide; theme: Theme; totalSlides: number; onClick: (s: Slide) => void }) {
+function SlidePreview({ slide, theme, totalSlides, brandIdentity, onClick }: { slide: Slide; theme: Theme; totalSlides: number; brandIdentity?: any; onClick: (s: Slide) => void }) {
   const [containerWidth, setContainerWidth] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -41,7 +42,7 @@ function SlidePreview({ slide, theme, totalSlides, onClick }: { slide: Slide; th
           height: '1350px'
         }}
       >
-        <SlideRenderer slide={slide} theme={theme} totalSlides={totalSlides} />
+        <SlideRenderer slide={slide} theme={theme} totalSlides={totalSlides} brandIdentity={brandIdentity} />
       </div>
     </div>
   )
@@ -61,8 +62,17 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
   const [selectedSlideIndex, setSelectedSlideIndex] = useState<number | null>(null)
   const [exportingPNG, setExportingPNG] = useState(false)
   const [exportingPDF, setExportingPDF] = useState(false)
+  const cancelRefPNG = useRef(false)
+  const cancelRefPDF = useRef(false)
   const [exportingPNGProgress, setExportingPNGProgress] = useState(0)
   const [exportingPDFProgress, setExportingPDFProgress] = useState(0)
+  const [brandSettings, setBrandSettings] = useState<any | null>(null)
+  const [userEmail, setUserEmail] = useState<string>("")
+
+  useEffect(() => {
+    getBrandSettings().then(setBrandSettings).catch(() => setBrandSettings(null))
+    getCurrentUserEmail().then(setUserEmail)
+  }, [])
 
   async function handleGenerate(theme?: string) {
     if (!topic.trim()) return
@@ -71,7 +81,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     trackEvent('carousel_generation_started', { slide_count: slideCount })  // tambahan ini
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const { data, error } = await supabase.functions.invoke('generate-carousel', {
+      const { data, error } = await supabase.functions.invoke('test', {
         body: { topic, slideCount, themePreference: theme || "Minimalist Clean" },
         headers: {
           Authorization: `Bearer ${session?.access_token}`,
@@ -100,31 +110,75 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
 
   async function handleExportPNG() {
     setExportingPNG(true)
+    cancelRefPNG.current = false
     setExportingPNGProgress(0)
     try {
-      await exportPNG(slides, selectedTheme, setExportingPNGProgress)
-      toast.success("Berhasil export PNG")
-      trackEvent('carousel_downloaded', { format: 'png', slide_count: slides.length }) // tracker event
-    } catch (error) {
-      toast.error("Gagal export PNG")
+      await exportPNG(slides, selectedTheme, brandIdentity, (progress) => {
+        setExportingPNGProgress(progress)
+        if (cancelRefPNG.current) throw new Error("Export dibatalkan")
+      })
+      if (!cancelRefPNG.current) {
+        toast.success("Berhasil export PNG")
+        trackEvent('carousel_downloaded', { format: 'png', slide_count: slides.length }) // tracker event
+      } else {
+        toast.info("Export dibatalkan")
+      }
+    } catch (error: any) {
+      if (!cancelRefPNG.current) {
+        toast.error(error.message || "Gagal export PNG")
+      } else {
+        toast.info("Export dibatalkan")
+      }
     } finally {
       setExportingPNG(false)
     }
   }
 
+  function handleCancelExportPNG() {
+    cancelRefPNG.current = true
+  }
+
   async function handleExportPDF() {
     setExportingPDF(true)
+    cancelRefPDF.current = false
     setExportingPDFProgress(0)
     try {
-      await exportPDF(slides, selectedTheme, setExportingPDFProgress)
-      toast.success("Berhasil export PDF")
-      trackEvent('carousel_downloaded', { format: 'pdf', slide_count: slides.length }) // tracker event
-    } catch (error) {
-      toast.error("Gagal export PDF")
+      await exportPDF(slides, selectedTheme, brandIdentity, (progress) => {
+        setExportingPDFProgress(progress)
+        if (cancelRefPDF.current) throw new Error("Export dibatalkan")
+      })
+      if (!cancelRefPDF.current) {
+        toast.success("Berhasil export PDF")
+        trackEvent('carousel_downloaded', { format: 'pdf', slide_count: slides.length }) // tracker event
+      } else {
+        toast.info("Export dibatalkan")
+      }
+    } catch (error: any) {
+      if (!cancelRefPDF.current) {
+        toast.error(error.message || "Gagal export PDF")
+      } else {
+        toast.info("Export dibatalkan")
+      }
     } finally {
       setExportingPDF(false)
     }
   }
+
+  function handleCancelExportPDF() {
+    cancelRefPDF.current = true
+  }
+
+  const resolvedHandle = brandSettings?.display_handle || (userEmail ? deriveDefaultHandle(userEmail) : "")
+  const brandIdentity = {
+    show: true, // belum ada toggle canvas, jadi default nyala
+    handle: resolvedHandle,
+    website: brandSettings?.website_url || "",
+  }
+  useEffect(() => {
+    toast.info("Debug brand identity", {
+      description: `email: "${userEmail}" | handle: "${resolvedHandle}" | brandSettings: ${JSON.stringify(brandSettings)}`,
+    })
+  }, [userEmail, brandSettings])
 
   return (
     <div className="relative">
@@ -151,6 +205,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                 slide={s}
                 theme={selectedTheme}
                 totalSlides={slides.length}
+                brandIdentity={brandIdentity}
                 onClick={() => setSelectedSlideIndex(i)}
               />
             ))}
@@ -170,6 +225,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                   slide={slides[selectedSlideIndex]}
                   theme={selectedTheme}
                   totalSlides={slides.length}
+                  brandIdentity={brandIdentity}
                 />
               </PreviewScaleWrapper>
               <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none">
@@ -198,12 +254,12 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
       {slides.length > 0 && (
         <div className="fixed bottom-6 left-16 right-0 z-40 flex justify-center pointer-events-none">
           <div className="flex gap-3 px-5 py-2 rounded-full border border-slate-200 bg-white/90 backdrop-blur-md shadow-2xl pointer-events-auto">
-            <Button onClick={handleExportPNG} disabled={exportingPNG} variant="ghost" size="sm" className="gap-2 rounded-full px-4">
-              {exportingPNG ? <><Loader2 className="size-4 animate-spin" />{exportingPNGProgress}%</> : <><ImageIcon className="size-4"/>PNG</>}
+            <Button onClick={exportingPNG ? handleCancelExportPNG : handleExportPNG} disabled={false} variant="ghost" size="sm" className="gap-3 rounded-full px-6 py-4">
+              {exportingPNG ? <><span className="text-red-500 font-medium">Batal</span> {exportingPNGProgress}%</> : <><ImageIcon className="size-4"/>PNG</>}
             </Button>
             <div className="w-px bg-slate-200 my-1.5"/>
-            <Button onClick={handleExportPDF} disabled={exportingPDF} variant="ghost" size="sm" className="gap-2 rounded-full px-4">
-              {exportingPDF ? <><Loader2 className="size-4 animate-spin"/>{exportingPDFProgress}%</> : <><FileText className="size-4"/>PDF</>}
+            <Button onClick={exportingPDF ? handleCancelExportPDF : handleExportPDF} disabled={false} variant="ghost" size="sm" className="gap-3 rounded-full px-6 py-4">
+              {exportingPDF ? <><span className="text-red-500 font-medium">Batal</span> {exportingPDFProgress}%</> : <><FileText className="size-4"/>PDF</>}
             </Button>
           </div>
         </div>

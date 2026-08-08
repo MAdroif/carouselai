@@ -1,3 +1,8 @@
 node_modules/
 dist/
 client_secret_*.json
+
+# Environment variables
+.env
+.env.local
+.env.*.local

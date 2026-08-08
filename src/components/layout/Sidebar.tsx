@@ -32,7 +32,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, currentPage, tokens, user
             {sidebarOpen ? <X size={24} /> : <Menu size={26} />}
           </Button>
           {sidebarOpen && (
-            <h1 className="text-xl font-bold truncate">CarouselAI</h1>
+            <h1 className="text-xl font-bold truncate">Glito</h1>
           )}
         </div>
 

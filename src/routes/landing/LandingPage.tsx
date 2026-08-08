@@ -88,7 +88,7 @@ export default function LandingPage() {
       <nav className={`navbar ${scrolled ? "scrolled" : ""}`}>
         <a href="#" className="logo">
           <div className="logo-icon"><Zap className="size-5" /></div>
-          <span className="logo-text">Carousel<span>AI</span></span>
+          <span className="logo-text">Glito</span>
         </a>
         <div className="nav-right">
           <a href="#how-it-works" className="nav-link">Cara Kerja</a>
@@ -204,7 +204,7 @@ export default function LandingPage() {
       </div>
 
       <div className="section reveal">
-        <div className="section-tag">Kenapa CarouselAI</div>
+        <div className="section-tag">Kenapa Glito</div>
         <h2 className="section-title">Bikin Konten<br />Gak Harus Siksa Diri</h2>
         <p className="section-sub">Bukan pengganti kreativitas. Ini tool buat kamu yang benci kerjaan repetitif saat desain.</p>
 
@@ -262,7 +262,7 @@ export default function LandingPage() {
       </div>
 
       <footer className="footer">
-        <p>© 2026 CarouselAI. All rights reserved.</p>
+        <p>© 2026 Glito. All rights reserved.</p>
       </footer>
     </div>
   )

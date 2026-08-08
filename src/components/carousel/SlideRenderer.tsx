@@ -16,6 +16,12 @@ export interface CardItem {
   item_description: string
 }
 
+export interface BrandIdentity {
+  show: boolean
+  handle: string
+  website: string
+}
+
 export interface Slide {
   slide: number
   composition: Composition
@@ -30,6 +36,7 @@ export interface Slide {
 }
 
 const DEFAULT_THEME = PRESET_THEMES[0]
+const TOOL_WATERMARK = "Made with Glito"
 
 const DEFAULT_COMPOSITION: Composition = {
   alignment: "center",
@@ -194,7 +201,7 @@ function CardGridLayout({ items, theme }: { items: CardItem[]; theme: Theme }) {
   )
 }
 
-function AdaptiveLayout({ slide, theme: externalTheme, totalSlides }: { slide: Slide; theme: Theme; totalSlides: number }) {
+function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentity }: { slide: Slide; theme: Theme; totalSlides: number; brandIdentity?: BrandIdentity }) {
   const theme = resolveTheme(externalTheme)
   const composition = resolveComposition(slide.composition)
   const { alignment, focus, accent } = composition
@@ -234,6 +241,8 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides }: { slide: S
   const svgPositions = isEven
     ? [ { top: -90, right: -170 }, { bottom: -90, left: -170 } ]
     : [ { top: -90, left: -170 }, { bottom: -90, right: -170 } ];
+
+  const headerSide = isEven ? "left" : "right"
 
   return (
     <div style={{
@@ -402,6 +411,46 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides }: { slide: S
               <LucideIcons.ChevronRight size={30} color={getContrastColor(finalHighlightBg)} strokeWidth={2.5} />
             </div>
           )}
+          {brandIdentity?.show && (brandIdentity.handle || brandIdentity.website) && (slide.slide === 1 || slide.slide === totalSlides) && (
+            <div style={{
+              position: "absolute",
+              top: "50px",
+              left: "80px",
+              right: "80px",
+              display: "flex",
+              justifyContent: headerSide === "left" ? "flex-start" : "flex-end",
+              zIndex: 30,
+              pointerEvents: "none",
+            }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px", textAlign: headerSide === "left" ? "left" : "right" }}>
+                {brandIdentity.handle && (
+                  <span style={{ fontSize: "24px", fontWeight: 600, color: theme.textMuted }}>
+                    @{brandIdentity.handle}
+                  </span>
+                )}
+                {brandIdentity.website && (
+                  <span style={{ fontSize: "20px", fontWeight: 500, color: theme.textMuted }}>
+                    {brandIdentity.website}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={{
+            position: "absolute",
+            bottom: "50px",
+            left: 0,
+            right: 0,
+            display: "flex",
+            justifyContent: "center",
+            zIndex: 25,
+            pointerEvents: "none",
+          }}>
+            <span style={{ fontSize: "18px", fontWeight: 500, color: theme.textMuted, opacity: 0.6 }}>
+              {TOOL_WATERMARK}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -436,7 +485,7 @@ export function PreviewScaleWrapper({
   )
 }
 
-export function SlideRenderer({ slide, theme: externalTheme, totalSlides }: { slide: Slide; theme?: Theme; totalSlides: number }) {
+export function SlideRenderer({ slide, theme: externalTheme, totalSlides, brandIdentity }: { slide: Slide; theme?: Theme; totalSlides: number; brandIdentity?: BrandIdentity }) {
   const activeTheme = resolveTheme(externalTheme || slide.theme);
-  return <AdaptiveLayout slide={slide} theme={activeTheme} totalSlides={totalSlides} />
+  return <AdaptiveLayout slide={slide} theme={activeTheme} totalSlides={totalSlides} brandIdentity={brandIdentity} />
 }

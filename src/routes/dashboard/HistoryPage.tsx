@@ -1,22 +1,17 @@
 import { useEffect, useState, useRef } from "react"
-import { getHistory, deleteCarousel } from "@/lib/db"
+import { getHistory, deleteCarousel, getBrandSettings } from "@/lib/db"
+import { deriveDefaultHandle } from "@/lib/brandDefaults"
+import { supabase } from "@/lib/supabase"
 import { Loader2, Trash2, X, Layout, ChevronLeft, ChevronRight, Search,
 CheckSquare, Square, MoreVertical, FileImage, FileText, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { SlideRenderer, PreviewScaleWrapper } from "@/components/carousel/SlideRenderer"
-import { type Theme } from "@/lib/themes"
 import { exportPNG, exportPDF } from "@/lib/export"
 import { parseError } from "@/lib/utils"
 
-export function HistoryPage({
-  setIsExporting, 
-  setExportProgress 
-}: { 
-  setIsExporting: (val: boolean) => void; 
-  setExportProgress: (val: number) => void; 
-}) {
+export function HistoryPage() {
   const [history, setHistory] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -24,10 +19,27 @@ export function HistoryPage({
   const [selectedHistory, setSelectedHistory] = useState<any | null>(null)
   const [isTitleExpanded, setIsTitleExpanded] = useState(false)
   const [activeSlideIndex, setActiveSlideIndex] = useState(0)
+  const slides = selectedHistory ? (Array.isArray(selectedHistory.content) ? selectedHistory.content : selectedHistory.content?.slides) : [];
+  const theme = selectedHistory?.content?.theme;
+  const currentSlide = slides && slides.length > 0 ? slides[activeSlideIndex] : null;
+
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [brandSettings, setBrandSettings] = useState<any | null>(null)
+  const [userEmail, setUserEmail] = useState<string>("")
+
+  const resolvedHandle = brandSettings?.display_handle || (userEmail ? deriveDefaultHandle(userEmail) : "")
+  const brandIdentity = {
+    show: selectedHistory?.show_brand_identity ?? true,
+    handle: resolvedHandle,
+    website: brandSettings?.website_url || "",
+  }
+
   const [isSelectionMode, setIsSelectionMode] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const pressTimer = useRef<NodeJS.Timeout | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const handlePressStart = (id: string) => {
     if (isSelectionMode) return
@@ -105,9 +117,8 @@ export function HistoryPage({
   const handleExport = async (type: 'png' | 'pdf') => {
     if (!selectedHistory?.content) return
     setShowExportMenu(false)
-
-    const slides = Array.isArray(selectedHistory.content) ? selectedHistory.content : selectedHistory.content?.slides;
-    const theme = selectedHistory.content?.theme || (Array.isArray(selectedHistory.content) ? selectedHistory.content[0]?.theme : null);
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
 
     if (!slides || slides.length === 0) return;
 
@@ -115,12 +126,13 @@ export function HistoryPage({
       setIsExporting(true)
       setExportProgress(0)
       if (type === 'png') {
-        await exportPNG(slides, theme, setExportProgress)
+        await exportPNG(slides, theme, brandIdentity, setExportProgress, signal)
       } else {
-        await exportPDF(slides, theme, setExportProgress)
+        await exportPDF(slides, theme, brandIdentity, setExportProgress, signal)
       }
       toast.success(`Berhasil export ${type.toUpperCase()}`)
-    } catch (err) {
+    } catch (err: any) {
+      if (err.message === "Aborted") return;
       toast.error(`Gagal export ${type.toUpperCase()}`)
     } finally {
       setIsExporting(false)
@@ -128,8 +140,21 @@ export function HistoryPage({
     }
   }
 
+  function handleCancelExport() {
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+    }
+    setIsExporting(false)
+    setExportProgress(0)
+    toast.info("Export dibatalkan")
+  }
+
   useEffect(() => {
     fetchHistory();
+    getBrandSettings().then(setBrandSettings).catch(() => setBrandSettings(null));
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) setUserEmail(data.user.email)
+    });
   }, []);
 
   useEffect(() => {
@@ -266,14 +291,7 @@ export function HistoryPage({
               </div>
             </div>
             <div className="flex flex-col">
-              {(() => {
-                const slides = Array.isArray(selectedHistory.content) ? selectedHistory.content : selectedHistory.content?.slides;
-                const theme: Theme | undefined = selectedHistory.content?.theme;
-                const currentSlide = slides?.[activeSlideIndex];
-
-                if (!currentSlide) return null;
-
-                return (
+              
                   <div className="relative flex items-center justify-center overflow-hidden min-h-[400px] border-y border-slate-200 dark:border-slate-700 bg-slate-100">
                     <div className="w-full aspect-[4/5] flex items-center justify-center">
                       <PreviewScaleWrapper width={384}>
@@ -281,6 +299,7 @@ export function HistoryPage({
                           slide={currentSlide}
                           theme={theme}
                           totalSlides={slides.length}
+                          brandIdentity={brandIdentity}
                         />
                       </PreviewScaleWrapper>
                     </div>
@@ -328,12 +347,38 @@ export function HistoryPage({
                       )}
                     </div>
                   </div>
-                );
-              })()}
+                
             </div>
           </div>
         </div>
       )}
-    </div>
+    
+                {isExporting && (
+                  <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pointer-events-auto">
+                    <div className="flex flex-col items-center gap-4 max-w-xs w-full text-center">
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-bold">Exporting...</h3>
+                        <p className="text-sm text-slate-500">Mohon tunggu, sedang memproses file Anda.</p>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="bg-indigo-500 h-full transition-[width] duration-300 ease-out"
+                          style={{ width: `${exportProgress || 0}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-mono font-medium text-slate-400">
+                        {exportProgress || 0}% Selesai
+                      </span>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      className="w-full max-w-3xs rounded-full py-6 text-lg border-2 border-red-500 shadow-xl"
+                      onClick={handleCancelExport}
+                    >
+                      <span className="text-white font-medium">Batal</span>
+                    </Button>
+                  </div>
+                )}
+</div>
   )
 }
