@@ -154,7 +154,7 @@ function ItemCard({ item, theme }: { item: CardItem; theme: Theme }) {
     <div style={{
       display: "flex", alignItems: "flex-start", gap: "20px",
       backgroundColor: theme.bgAlt, border: `1px solid ${theme.accent}33`,
-      borderRadius: "20px", padding: "28px", width: "100%", maxWidth: "430px", boxSizing: "border-box",
+      borderRadius: "20px", padding: "28px", width: "100%", maxWidth: "100%", boxSizing: "border-box",
       position: "relative",
     }}>
       <div style={{
@@ -207,7 +207,7 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
   const { alignment, focus, accent } = composition
   const { highlight_bg } = slide
   const themeSvg = theme.svg_code
-  const canvasPadding = "80px"
+  const canvasPadding = "110px"
   const canvasHeight = "1350px"
   const contentHeight = "1212px"
 
@@ -295,8 +295,24 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
         </div>
       )}
 
+      {slide.slide > 1 && slide.slide < totalSlides && (
+        <div style={{
+          position: "absolute",
+          top: "100px",
+          left: canvasPadding,
+          fontSize: "28px",
+          fontWeight: 600,
+          fontFamily: "monospace",
+          color: theme.textMuted,
+          letterSpacing: "2px",
+          zIndex: 30,
+        }}>
+          {String(slide.slide).padStart(2, "0")} / {String(totalSlides).padStart(2, "0")}
+        </div>
+      )}
+
       <div style={{
-        width: "960px",
+        width: "100%",
         height: contentHeight,
         display: "flex",
         flexDirection: "column",
@@ -315,31 +331,7 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
           position: "relative",
           zIndex: 20,
         }}>
-          {slide.slide > 1 && slide.slide < totalSlides && (
-            <div style={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "center",
-              marginTop: "-80px",
-              marginBottom: "50px"
-            }}>
-              <div style={{
-                width: "120px",
-                height: "120px",
-                borderRadius: "50%",
-                backgroundColor: finalHighlightBg,
-                color: getContrastColor(finalHighlightBg),
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "70px",
-                fontWeight: 800,
-                boxShadow: `0 4px 12px ${theme.accent}44`,
-              }}>
-                {slide.slide - 1}
-              </div>
-            </div>
-          )}
+          
           <div style={{
             width: "100%",
             display: "flex",
@@ -373,11 +365,11 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
             <div style={{
               width: "100%",
               display: "flex",
-              justifyContent: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end"
+              justifyContent: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end",
             }}>
               <p style={{
                 fontSize: getFontSize(slide.body_text, currentFocus.bodyMax, currentFocus.bodyMin),
-                color: theme.text, lineHeight: 1.6, margin: 0, maxWidth: "75%"
+                color: theme.text, lineHeight: 1.6, margin: 0,
               }}>
                 <HighlightedText
                   text={slide.body_text}
@@ -415,8 +407,8 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
             <div style={{
               position: "absolute",
               top: "50px",
-              left: "80px",
-              right: "80px",
+              left: "30px",
+              right: "30px",
               display: "flex",
               justifyContent: headerSide === "left" ? "flex-start" : "flex-end",
               zIndex: 30,
@@ -424,12 +416,12 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
             }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "4px", textAlign: headerSide === "left" ? "left" : "right" }}>
                 {brandIdentity.handle && (
-                  <span style={{ fontSize: "24px", fontWeight: 600, color: theme.textMuted }}>
-                    @{brandIdentity.handle}
+                  <span style={{ fontSize: "32px", fontWeight: 800, color: theme.accent }}>
+                    {brandIdentity.handle}
                   </span>
                 )}
                 {brandIdentity.website && (
-                  <span style={{ fontSize: "20px", fontWeight: 500, color: theme.textMuted }}>
+                  <span style={{ fontSize: "20px", fontWeight: 500, color: theme.accent }}>
                     {brandIdentity.website}
                   </span>
                 )}
