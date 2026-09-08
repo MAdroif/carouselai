@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Loader2, Minus, Plus, Repeat, Minimize2, Maximize2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -22,14 +22,7 @@ export function GenerationControls({
 }: GenerationControlsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [showExpandIcon, setShowExpandIcon] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<string>("Minimalist Clean")
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      setShowExpandIcon(textareaRef.current.scrollHeight > 20);
-    }
-  }, [topic, inputMode]);
 
   const toggleMode = () => {
     setInputMode(inputMode === 'topic' ? 'script' : 'topic')
