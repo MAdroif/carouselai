@@ -68,6 +68,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
   const [exportingPDFProgress, setExportingPDFProgress] = useState(0)
   const [brandSettings, setBrandSettings] = useState<any | null>(null)
   const [userEmail, setUserEmail] = useState<string>("")
+  const [inputMode, setInputMode] = useState<'topic' | 'script'>('topic')
 
   useEffect(() => {
     getBrandSettings().then(setBrandSettings).catch(() => setBrandSettings(null))
@@ -78,11 +79,17 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     if (!topic.trim()) return
     setLoading(true)
     setSlides([])
-    trackEvent('carousel_generation_started', { slide_count: slideCount })  // tambahan ini
+    trackEvent('carousel_generation_started', { mode: inputMode, slide_count: inputMode === 'topic' ? slideCount : undefined })
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const { data, error } = await supabase.functions.invoke('test', {
-        body: { topic, slideCount, themePreference: theme || "Minimalist Clean" },
+
+      const functionSlug = inputMode === 'topic' ? 'test' : 'skrip-carousel'
+      const requestBody = inputMode === 'topic'
+        ? { topic, slideCount, themePreference: theme || "Minimalist Clean" }
+        : { script: topic, themePreference: theme || "Minimalist Clean" }
+
+      const { data, error } = await supabase.functions.invoke(functionSlug, {
+        body: requestBody,
         headers: {
           Authorization: `Bearer ${session?.access_token}`,
           'Content-Type': 'application/json'
@@ -94,8 +101,9 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
       await saveCarousel(topic, data)
       onTokensChange()
       trackEvent('carousel_generation_completed', {
+        mode: inputMode,
         style: data.theme,
-        slide_count: slideCount,
+        slide_count: data.slides?.length,
       })
     } catch (error: any) {
       console.error(error)
@@ -186,6 +194,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
           slideCount={slideCount} setSlideCount={setSlideCount}
           loading={loading}
           onGenerate={handleGenerate} userTokens={userTokens}
+          inputMode={inputMode} setInputMode={setInputMode}
         />
       ) : (
         <div className="flex flex-col gap-6 max-w-7xl mx-9 pt-8">
