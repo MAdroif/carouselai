@@ -224,7 +224,7 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
   }
 
   const focusStyles: Record<string, any> = {
-    headline: { titleMax: 165, titleMin: 120, bodyMax: 35, bodyMin: 25 },
+    headline: { titleMax: 85, titleMin: 60, bodyMax: 35, bodyMin: 25 },
     body: { titleMax: 75, titleMin: 40, bodyMax: 45, bodyMin: 34 },
     balanced: { titleMax: 75, titleMin: 42, bodyMax: 45, bodyMin: 34 },
   }
