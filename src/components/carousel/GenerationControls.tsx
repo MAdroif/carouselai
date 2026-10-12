@@ -22,7 +22,7 @@ export function GenerationControls({
 }: GenerationControlsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [selectedTheme, setSelectedTheme] = useState<string>("Minimalist Clean")
+  const [selectedTheme, setSelectedTheme] = useState<string>("Edukasi & Psikologi")
 
   const toggleMode = () => {
     setInputMode(inputMode === 'topic' ? 'script' : 'topic')
@@ -94,8 +94,10 @@ export function GenerationControls({
                  <SelectValue placeholder="Tema" />
                </SelectTrigger>
                <SelectContent className="bg-white dark:bg-[#2e2e2e]">
-                 <SelectItem value="Bold Modern">Bold Modern</SelectItem>
-                 <SelectItem value="Minimalist Clean">Minimalist Clean</SelectItem>
+                 <SelectItem value="Edukasi & Psikologi">Edukasi & Psikologi</SelectItem>
+                 <SelectItem value="Tech & Digital">Tech & Digital</SelectItem>
+                 <SelectItem value="Karier & Bisnis">Karier & Bisnis</SelectItem>
+                 <SelectItem value="Viral & Promosi">Viral & Promosi</SelectItem>
                </SelectContent>
              </Select>
              

@@ -8,7 +8,9 @@ const ADMIN_EMAIL = "dataframe777@gmail.com"
 
 interface UserStat {
   email: string
-  total_generate: number
+  started: number
+  completed: number
+  downloaded: number
   terakhir_generate: string | null
 }
 
@@ -59,11 +61,11 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!isAdmin) return
-  
+
     async function loadFunnel() {
       setLoadingFunnel(true)
       const { data, error } = await supabase.rpc("get_funnel_stats")
-  
+
       if (error) {
         toast.error("Gagal ambil data funnel", {
           description: error.message,
@@ -71,11 +73,11 @@ export default function AdminDashboard() {
         setLoadingFunnel(false)
         return
       }
-  
+
       setFunnel(data?.[0] ?? null)
       setLoadingFunnel(false)
     }
-  
+
     loadFunnel()
   }, [isAdmin])
 
@@ -96,7 +98,7 @@ export default function AdminDashboard() {
   }
 
   const totalUser = userStats.length
-  const totalGenerateSemua = userStats.reduce((sum, row) => sum + row.total_generate, 0)
+  const totalGenerateSemua = userStats.reduce((sum, row) => sum + row.completed, 0)
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
@@ -160,21 +162,23 @@ export default function AdminDashboard() {
           <thead className="bg-slate-50 text-left">
             <tr>
               <th className="px-4 py-3 font-medium text-slate-600">Email</th>
-              <th className="px-4 py-3 font-medium text-slate-600">Total Generate</th>
+              <th className="px-4 py-3 font-medium text-slate-600">Mulai</th>
+              <th className="px-4 py-3 font-medium text-slate-600">Selesai</th>
+              <th className="px-4 py-3 font-medium text-slate-600">Download</th>
               <th className="px-4 py-3 font-medium text-slate-600">Terakhir Aktif</th>
             </tr>
           </thead>
           <tbody>
             {loadingStats ? (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
                   <Loader2 className="size-5 animate-spin inline-block mr-2" />
                   Memuat data...
                 </td>
               </tr>
             ) : userStats.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
                   Belum ada data generate
                 </td>
               </tr>
@@ -182,7 +186,23 @@ export default function AdminDashboard() {
               userStats.map((row, i) => (
                 <tr key={i} className="border-t border-slate-100">
                   <td className="px-4 py-3">{row.email}</td>
-                  <td className="px-4 py-3">{row.total_generate}</td>
+                  <td className="px-4 py-3">{row.started}</td>
+                  <td className="px-4 py-3">
+                    {row.completed}
+                    {row.started > 0 && (
+                      <span className="text-slate-400 text-xs">
+                        {" "}({Math.round((row.completed / row.started) * 100)}%)
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {row.downloaded}
+                    {row.completed > 0 && (
+                      <span className="text-slate-400 text-xs">
+                        {" "}({Math.round((row.downloaded / row.completed) * 100)}%)
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-slate-500">
                     {row.terakhir_generate
                       ? new Date(row.terakhir_generate).toLocaleString("id-ID")
