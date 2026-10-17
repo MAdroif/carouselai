@@ -6,3 +6,6 @@ client_secret_*.json
 .env
 .env.local
 .env.*.local
+
+# Archives
+*.zip

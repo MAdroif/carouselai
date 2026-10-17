@@ -1,288 +1,394 @@
-import { useEffect, useRef, useState } from "react"
+import { useId, useState } from "react"
+import type { ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
-import { Zap, PencilLine, Palette, Upload, Cpu, Smartphone, Rocket, Heart, MessageCircle, Send, Bookmark } from "lucide-react"
-import HeroVisual from "./HeroVisual"
+import {
+  ArrowDownRight,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  CirclePlay,
+  Download,
+  Layers,
+  MousePointer2,
+  Palette,
+  PencilLine,
+  Sparkles,
+  Zap,
+} from "lucide-react"
 import "./LandingPage.css"
 
-function IGMockup({ images, className }: { images: string[]; className?: string }) {
+type Sample = {
+  name: string
+  description: string
+  image: string
+  alt: string
+  style: "minimal" | "editorial" | "bold"
+}
+
+const samples: Sample[] = [
+  {
+    name: "Minimalis",
+    description: "Ruang lega dan tampilan yang bersih.",
+    image: "/assets/landing/minimalist-clean/slide-1.webp",
+    alt: "Contoh slide carousel dengan gaya minimalis",
+    style: "minimal",
+  },
+  {
+    name: "Editorial",
+    description: "Tipografi tegas untuk ide yang ingin menonjol.",
+    image: "/assets/landing/bold-stabilu/slide-1.webp",
+    alt: "Contoh slide carousel dengan gaya editorial",
+    style: "editorial",
+  },
+  {
+    name: "Bold",
+    description: "Kontras kuat untuk pesan yang langsung terbaca.",
+    image: "/assets/landing/bold/slide-1.webp",
+    alt: "Contoh slide carousel dengan gaya bold",
+    style: "bold",
+  },
+]
+
+const faqs = [
+  {
+    question: "Apa itu Glito?",
+    answer:
+      "Glito adalah tool AI untuk membantu mengubah ide atau topik menjadi draft carousel visual. Tujuannya mengurangi pekerjaan desain yang repetitif, bukan menggantikan ide dan penilaianmu.",
+  },
+  {
+    question: "Bagaimana cara menggunakannya?",
+    answer:
+      "Mulai dari topik atau bahan tulisan, buat carousel, lalu tinjau hasilnya. Kamu bisa melanjutkan penyuntingan di editor sebelum mengunduh hasilnya.",
+  },
+  {
+    question: "Apakah hasilnya masih bisa diedit?",
+    answer:
+      "Ya. Alur Glito mencakup editor agar kamu bisa meninjau dan merapikan hasil sebelum mengunduhnya. Tetap periksa teks dan visual agar sesuai dengan maksud kontenmu.",
+  },
+  {
+    question: "Apakah Glito punya versi gratis?",
+    answer:
+      "Kredit gratis tersedia untuk mencoba Glito. Jumlah kredit dan ketentuan yang berlaku ditampilkan di aplikasi, sehingga kamu bisa memeriksanya sebelum melanjutkan.",
+  },
+  {
+    question: "Apakah Glito menggantikan Canva?",
+    answer:
+      "Tidak sepenuhnya. Glito berfokus mempercepat pembuatan draft carousel dengan AI. Tool desain umum seperti Canva tetap berguna untuk kebutuhan desain yang sangat spesifik atau pengaturan manual yang lebih luas.",
+  },
+  {
+    question: "Apakah hasilnya pasti viral atau meningkatkan engagement?",
+    answer:
+      "Tidak ada tool yang bisa menjamin itu. Glito membantu proses produksi visual; kualitas ide, akurasi informasi, relevansi audiens, dan distribusi konten tetap berpengaruh pada hasil akhirnya.",
+  },
+]
+
+function PrimaryCta({
+  onClick,
+  children = "Coba Glito Gratis",
+  className = "",
+}: {
+  onClick: () => void
+  children?: ReactNode
+  className?: string
+}) {
   return (
-    <div className={`ig-mockup-container ${className}`}>
-      <div className="ig-screen">
-        <div className="ig-header">
-          <div className="ig-user-info">
-            <div className="ig-avatar" />
-            <span className="ig-username">dataframe</span>
-          </div>
-          <div className="ig-options">•••</div>
-        </div>
+    <button className={`glito-button glito-button-primary ${className}`} onClick={onClick}>
+      <span>{children}</span>
+      <ArrowRight aria-hidden="true" size={17} strokeWidth={2.2} />
+    </button>
+  )
+}
 
-        <div className="ig-carousel-viewport">
-          {images.map((src, i) => (
-            <div key={i} className="ig-slide-wrapper">
-              <img src={src} alt={`Slide ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-            </div>
-          ))}
-        </div>
+function Brand() {
+  return (
+    <a className="glito-brand" href="#beranda" aria-label="Glito, kembali ke awal">
+      <span className="glito-brand-mark" aria-hidden="true">
+        <Zap size={18} fill="currentColor" strokeWidth={2.3} />
+      </span>
+      <span>glito</span>
+    </a>
+  )
+}
 
-        <div className="ig-footer">
-          <div className="ig-actions">
-            <Heart className="size-6" />
-            <MessageCircle className="size-6" />
-            <Send className="size-6" />
+function HeroPreview() {
+  return (
+    <div className="glito-hero-preview" aria-label="Pratinjau contoh hasil carousel Glito">
+      <div className="glito-preview-window-bar">
+        <span className="glito-window-dot glito-window-dot-pink" />
+        <span className="glito-window-dot glito-window-dot-yellow" />
+        <span className="glito-window-dot glito-window-dot-green" />
+        <span className="glito-preview-window-title">Contoh hasil carousel</span>
+        <span className="glito-preview-chip"><Sparkles size={12} /> Contoh visual</span>
+      </div>
+      <div className="glito-preview-workspace">
+        <div className="glito-preview-sidecopy">
+          <span className="glito-preview-kicker">DARI IDE MENJADI VISUAL</span>
+          <strong>Draft yang bisa kamu lanjutkan.</strong>
+          <p>Mulai dari hasil AI, lalu tinjau dan sesuaikan di editor.</p>
+          <div className="glito-preview-checkline"><Check size={14} /> Bisa ditinjau sebelum diunduh</div>
+        </div>
+        <div className="glito-preview-stack" aria-hidden="true">
+          <div className="glito-preview-paper glito-preview-paper-back">
+            <img src="/assets/landing/bold/slide-2.webp" alt="" loading="lazy" />
           </div>
-          <div className="ig-bookmark">
-            <Bookmark className="size-6" />
+          <div className="glito-preview-paper glito-preview-paper-mid">
+            <img src="/assets/landing/bold-stabilu/slide-2.webp" alt="" loading="lazy" />
+          </div>
+          <div className="glito-preview-paper glito-preview-paper-front">
+            <img src="/assets/landing/minimalist-clean/slide-1.webp" alt="" loading="eager" />
           </div>
         </div>
+      </div>
+      <div className="glito-preview-footer">
+        <span><span className="glito-status-dot" /> Pratinjau contoh</span>
+        <span>Ide tetap dari kamu <ArrowDownRight size={14} /></span>
       </div>
     </div>
   )
 }
 
-function FaqItem({ q, a }: { q: string; a: string }) {
-  const [open, setOpen] = useState(false)
+function SampleCard({ sample, index }: { sample: Sample; index: number }) {
   return (
-    <div className={`faq-item ${open ? "open" : ""}`}>
-      <div className="faq-q" onClick={() => setOpen(!open)}>
-        {q}
-        <span className="faq-arrow">▼</span>
+    <article className={`glito-sample-card glito-sample-${sample.style}`}>
+      <div className="glito-sample-image-wrap">
+        <img src={sample.image} alt={sample.alt} loading="lazy" />
+        <span className="glito-sample-number">0{index + 1}</span>
       </div>
-      <div className="faq-a">
-        <p>{a}</p>
+      <div className="glito-sample-copy">
+        <h3>{sample.name}</h3>
+        <p>{sample.description}</p>
       </div>
-    </div>
+    </article>
+  )
+}
+
+function StepCard({
+  number,
+  icon,
+  title,
+  description,
+}: {
+  number: string
+  icon: ReactNode
+  title: string
+  description: string
+}) {
+  return (
+    <article className="glito-step-card">
+      <div className="glito-step-head">
+        <span className="glito-step-number">{number}</span>
+        <span className="glito-step-icon" aria-hidden="true">{icon}</span>
+      </div>
+      <h3>{title}</h3>
+      <p>{description}</p>
+    </article>
+  )
+}
+
+function FaqItem({ question, answer }: { question: string; answer: string }) {
+  const [open, setOpen] = useState(false)
+  const panelId = useId()
+
+  return (
+    <article className={`glito-faq-item${open ? " is-open" : ""}`}>
+      <h3 className="glito-faq-heading">
+        <button
+          className="glito-faq-trigger"
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span>{question}</span>
+          <ChevronDown className="glito-faq-chevron" size={19} aria-hidden="true" />
+        </button>
+      </h3>
+      <div className="glito-faq-panel" id={panelId} hidden={!open}>
+        <p>{answer}</p>
+      </div>
+    </article>
   )
 }
 
 export default function LandingPage() {
   const navigate = useNavigate()
-  const [scrolled, setScrolled] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 50)
-    window.addEventListener("scroll", onScroll)
-    return () => window.removeEventListener("scroll", onScroll)
-  }, [])
-
-  useEffect(() => {
-    const els = rootRef.current?.querySelectorAll(".reveal")
-    if (!els) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("visible")
-            observer.unobserve(entry.target)
-          }
-        })
-      },
-      { threshold: 0.1, rootMargin: "0px 0px -50px 0px" }
-    )
-    els.forEach((el) => observer.observe(el))
-    return () => observer.disconnect()
-  }, [])
+  const goToAuth = () => navigate("/auth")
 
   return (
-    <div className="landing-body" ref={rootRef}>
-      <nav className={`navbar ${scrolled ? "scrolled" : ""}`}>
-        <a href="#" className="logo">
-          <div className="logo-icon"><Zap className="size-5" /></div>
-          <span className="logo-text">Glito</span>
-        </a>
-        <div className="nav-right">
-          <a href="#how-it-works" className="nav-link">Cara Kerja</a>
-          <button className="btn-primary" onClick={() => navigate("/auth")}>Masuk</button>
-        </div>
-      </nav>
+    <div className="glito-landing" id="beranda">
+      <a className="glito-skip-link" href="#konten-utama">Lewati ke konten</a>
 
-      <section className="hero">
-        <div className="hero-grid" />
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-        <div className="orb orb-3" />
-
-        <div className="hero-container">
-          <div className="hero-content">
-            <h1>
-              Ide Konten
-              <span className="line-accent">Jadi Carousel dalam 60 Detik</span>
-            </h1>
-            <p className="hero-sub">
-              Stop buang waktu buat hal repetitif seperti atur layout dan warna. Fokus ke ide dan strategi kontenmu, biar AI yang eksekusi visualnya. Cepat, simpel, dan ramah di kantong.
-            </p>
-            <button className="submit-btn" onClick={() => navigate("/auth")}>
-              Coba Gratis Sekarang
-            </button>
-            <p className="cta-subtext">Klaim kredit gratismu sekarang.</p>
-          </div>
-          <div className="hero-visual">
-            <HeroVisual />
+      <header className="glito-header">
+        <div className="glito-header-inner">
+          <Brand />
+          <nav className="glito-nav" aria-label="Navigasi utama">
+            <a href="#contoh">Contoh hasil</a>
+            <a href="#cara-kerja">Cara kerja</a>
+            <a href="#faq">FAQ</a>
+          </nav>
+          <div className="glito-header-actions">
+            <button className="glito-login-link" type="button" onClick={goToAuth}>Masuk</button>
+            <PrimaryCta onClick={goToAuth} className="glito-header-cta">Coba gratis</PrimaryCta>
           </div>
         </div>
-      </section>
+      </header>
 
-      <div className="gallery-wrapper reveal">
-        <div className="section-tag">Satu AI, Banyak Gaya</div>
-        <h2 className="section-title">Hasilnya Selalu Beda,<br />Sesuai Topik Kamu</h2>
-        <div className="gallery-track">
-          <IGMockup images={[
-            "/assets/landing/minimalist-clean/slide-1.webp",
-            "/assets/landing/minimalist-clean/slide-2.webp",
-            "/assets/landing/minimalist-clean/slide-3.webp",
-            "/assets/landing/minimalist-clean/slide-4.webp",
-            "/assets/landing/minimalist-clean/slide-5.webp",
-            "/assets/landing/minimalist-clean/slide-6.webp"
-          ]} />
-          <IGMockup images={[
-            "/assets/landing/bold-stabilu/slide-1.webp",
-            "/assets/landing/bold-stabilu/slide-2.webp",
-            "/assets/landing/bold-stabilu/slide-3.webp",
-            "/assets/landing/bold-stabilu/slide-4.webp",
-            "/assets/landing/bold-stabilu/slide-5.webp",
-            "/assets/landing/bold-stabilu/slide-6.webp"
-          ]} />
-          <IGMockup images={[
-            "/assets/landing/bold/slide-1.webp",
-            "/assets/landing/bold/slide-2.webp",
-            "/assets/landing/bold/slide-3.webp",
-            "/assets/landing/bold/slide-4.webp",
-            "/assets/landing/bold/slide-5.webp",
-            "/assets/landing/bold/slide-6.webp"
-          ]} />
+      <main id="konten-utama">
+        <section className="glito-hero" aria-labelledby="glito-hero-title">
+          <div className="glito-hero-grid" aria-hidden="true" />
+          <div className="glito-hero-inner">
+            <div className="glito-hero-copy">
+              <div className="glito-eyebrow"><span className="glito-eyebrow-icon"><Sparkles size={14} /></span> AI carousel generator untuk content creator</div>
+              <h1 id="glito-hero-title">Dari ide konten menjadi <span>carousel visual.</span></h1>
+              <p className="glito-hero-description">
+                Ubah topik menjadi draft carousel dengan bantuan AI. Tinjau, edit, lalu unduh hasilnya—tanpa harus menyusun setiap elemen desain dari nol.
+              </p>
+              <div className="glito-hero-actions">
+                <PrimaryCta onClick={goToAuth} />
+                <a className="glito-secondary-link" href="#contoh">Lihat contoh hasil <ArrowDownRight size={17} /></a>
+              </div>
+              <div className="glito-hero-reassurance">
+                <span><Check size={15} /> Kredit gratis tersedia untuk mencoba</span>
+                <span><Check size={15} /> Hasil bisa ditinjau sebelum diunduh</span>
+              </div>
+            </div>
+            <div className="glito-hero-art">
+              <HeroPreview />
+              <div className="glito-floating-note"><span className="glito-floating-note-icon"><Layers size={17} /></span><span><strong>Mulai dari ide</strong><small>Lanjutkan dengan gaya visualmu</small></span></div>
+            </div>
+          </div>
+          <div className="glito-hero-bottomline"><span>BUAT PROSES DESAIN LEBIH RINGKAS</span><span className="glito-bottomline-rule" /><span>IDE · DRAFT · EDIT · UNDUH</span></div>
+        </section>
+
+        <section className="glito-section glito-samples-section" id="contoh" aria-labelledby="glito-samples-title">
+          <div className="glito-section-heading glito-heading-row">
+            <div>
+              <p className="glito-section-eyebrow">LIHAT HASILNYA</p>
+              <h2 id="glito-samples-title">Satu topik, banyak kemungkinan visual.</h2>
+            </div>
+            <p className="glito-section-intro">Ini contoh gaya visual yang bisa kamu jadikan referensi. Hasil aktual tetap perlu ditinjau dan disesuaikan dengan isi kontenmu.</p>
+          </div>
+          <div className="glito-samples-grid">
+            {samples.map((sample, index) => <SampleCard key={sample.name} sample={sample} index={index} />)}
+          </div>
+        </section>
+
+        <section className="glito-demo-section" aria-labelledby="glito-demo-title">
+          <div className="glito-demo-inner">
+            <div className="glito-demo-copy">
+              <p className="glito-section-eyebrow">LIHAT ALURNYA</p>
+              <h2 id="glito-demo-title">Dari proses yang berulang ke alur yang lebih sederhana.</h2>
+              <p>Kenali alur kerja Glito sebelum mulai. Buat draft, periksa hasilnya, lalu lanjutkan penyuntingan sesuai kebutuhan kontenmu.</p>
+              <a href="#cara-kerja" className="glito-text-link">Pelajari tiga langkahnya <ArrowRight size={16} /></a>
+            </div>
+            <div className="glito-video-frame">
+              <div className="glito-video-caption"><span className="glito-video-play-icon"><CirclePlay size={19} /></span><span><strong>Demo Glito</strong><small>Rekaman alur produk</small></span></div>
+              <video controls playsInline preload="metadata" poster="/assets/landing/minimalist-clean/slide-1.webp" aria-label="Video demo alur kerja Glito">
+                <source src="/dashboard-demo1.mp4" type="video/mp4" />
+                Browser kamu tidak mendukung pemutaran video ini.
+              </video>
+            </div>
+          </div>
+        </section>
+
+        <section className="glito-section glito-how-section" id="cara-kerja" aria-labelledby="glito-how-title">
+          <div className="glito-section-heading glito-centered-heading">
+            <p className="glito-section-eyebrow">CARA KERJA</p>
+            <h2 id="glito-how-title">Tiga langkah dari ide ke carousel.</h2>
+            <p className="glito-section-intro">Kamu tetap mengarahkan isi kontennya. Glito membantu mempercepat bagian produksi visual.</p>
+          </div>
+          <div className="glito-steps-grid">
+            <StepCard number="01" icon={<PencilLine size={21} />} title="Mulai dari topik" description="Tulis ide atau masukkan bahan tulisan yang ingin kamu kembangkan menjadi carousel." />
+            <StepCard number="02" icon={<Sparkles size={21} />} title="Buat draft visual" description="Biarkan AI membantu menyusun draft, lalu pilih hasil yang paling sesuai dengan tujuan kontenmu." />
+            <StepCard number="03" icon={<Download size={21} />} title="Edit dan unduh" description="Periksa teks, rapikan hasil di editor, lalu unduh saat sudah siap digunakan." />
+          </div>
+          <div className="glito-steps-note"><Sparkles size={16} /> AI membantu proses produksi; keputusan akhir dan kualitas informasi tetap di tanganmu.</div>
+        </section>
+
+        <section className="glito-benefits-section" aria-labelledby="glito-benefits-title">
+          <div className="glito-benefits-inner">
+            <div className="glito-benefits-copy">
+              <p className="glito-section-eyebrow">DIBUAT UNTUK ALUR KERJA CREATOR</p>
+              <h2 id="glito-benefits-title">Lebih sedikit pekerjaan repetitif. Lebih banyak ruang untuk ide.</h2>
+              <p>Glito cocok ketika hambatanmu bukan kekurangan ide, tetapi waktu yang habis untuk menyusun setiap slide.</p>
+              <PrimaryCta onClick={goToAuth}>Coba Glito Gratis</PrimaryCta>
+            </div>
+            <div className="glito-benefits-list">
+              <article className="glito-benefit-item">
+                <span className="glito-benefit-icon"><Zap size={19} /></span>
+                <div><h3>Mulai dari ide, bukan kanvas kosong</h3><p>Gunakan topik sebagai titik awal agar proses menyusun visual tidak selalu dimulai dari nol.</p></div>
+              </article>
+              <article className="glito-benefit-item">
+                <span className="glito-benefit-icon"><Palette size={19} /></span>
+                <div><h3>Eksplorasi gaya visual</h3><p>Lihat contoh pendekatan visual yang berbeda, lalu pilih yang mendukung pesan kontenmu.</p></div>
+              </article>
+              <article className="glito-benefit-item">
+                <span className="glito-benefit-icon"><MousePointer2 size={19} /></span>
+                <div><h3>Tetap punya kendali</h3><p>Tinjau dan edit hasil sebelum diunduh. Jangan langsung memublikasikan teks AI tanpa pemeriksaan.</p></div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section className="glito-fit-section" aria-labelledby="glito-fit-title">
+          <div className="glito-fit-inner">
+            <div className="glito-fit-heading">
+              <p className="glito-section-eyebrow">COCOK UNTUK SIAPA?</p>
+              <h2 id="glito-fit-title">Berguna saat kamu perlu produksi carousel dengan lebih praktis.</h2>
+            </div>
+            <div className="glito-fit-columns">
+              <div className="glito-fit-column glito-fit-good">
+                <h3><Check size={18} /> Glito cocok jika kamu…</h3>
+                <ul>
+                  <li>Sering membuat carousel untuk konten atau bisnis.</li>
+                  <li>Ingin mempercepat proses dari topik ke draft visual.</li>
+                  <li>Masih ingin memeriksa dan mengedit hasil sebelum posting.</li>
+                </ul>
+              </div>
+              <div className="glito-fit-column glito-fit-limit">
+                <h3><Layers size={18} /> Perlu diingat</h3>
+                <ul>
+                  <li>AI bisa membuat teks atau visual yang perlu diperbaiki.</li>
+                  <li>Glito tidak menjamin konten viral atau engagement tinggi.</li>
+                  <li>Desain yang sangat spesifik mungkin tetap perlu dikerjakan manual.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="glito-faq-section" id="faq" aria-labelledby="glito-faq-title">
+          <div className="glito-faq-inner">
+            <div className="glito-faq-intro">
+              <p className="glito-section-eyebrow">FAQ</p>
+              <h2 id="glito-faq-title">Sebelum mulai.</h2>
+              <p>Jawaban singkat untuk membantu kamu memutuskan apakah Glito sesuai dengan alur kerjamu.</p>
+            </div>
+            <div className="glito-faq-list">
+              {faqs.map((faq) => <FaqItem key={faq.question} question={faq.question} answer={faq.answer} />)}
+            </div>
+          </div>
+        </section>
+
+        <section className="glito-final-cta" aria-labelledby="glito-final-title">
+          <div className="glito-final-cta-inner">
+            <div className="glito-final-sparkle" aria-hidden="true"><Sparkles size={23} /></div>
+            <p className="glito-section-eyebrow">MULAI DARI SATU IDE</p>
+            <h2 id="glito-final-title">Coba ubah idemu menjadi carousel.</h2>
+            <p>Buat draft pertama, periksa hasilnya, lalu putuskan sendiri apakah Glito cocok untukmu.</p>
+            <PrimaryCta onClick={goToAuth}>Coba Glito Gratis</PrimaryCta>
+            <span className="glito-final-note">Kredit gratis tersedia untuk mencoba.</span>
+          </div>
+        </section>
+      </main>
+
+      <footer className="glito-footer">
+        <div className="glito-footer-inner">
+          <Brand />
+          <p>Alat bantu untuk membuat proses produksi carousel lebih praktis.</p>
+          <span>© {new Date().getFullYear()} Glito</span>
         </div>
-      </div>
-
-      <div className="demo-wrapper reveal">
-        <div className="section-tag">Intip Prosesnya</div>
-        <h2 className="section-title">Ide Jadi Visual<br />dalam Sekejap</h2>
-        <div className="demo-container">
-          <div className="demo-topbar">
-            <div className="dot-red" />
-            <div className="dot-yellow" />
-            <div className="dot-green" />
-            <div className="demo-url">app.carouselai.com/dashboard</div>
-          </div>
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            style={{ width: '100%', display: 'block' }}
-          >
-            <source src="/dashboard-demo1.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        </div>
-      </div>
-
-      <div className="section reveal" id="how-it-works">
-        <div className="section-tag">Proses 60 Detik</div>
-        <h2 className="section-title">Tiga langkah,<br />carousel siap posting</h2>
-        <p className="section-sub">Desain bukan lagi bottleneck. Kamu fokus ke ide, AI yang eksekusi.</p>
-
-        <div className="steps">
-          <div className="step-card">
-            <div className="step-num">01</div>
-            <div className="step-icon"><PencilLine className="size-5" /></div>
-            <h3>Masukkan Topik</h3>
-            <p>Tulis ide atau topik kamu. Bisa dari caption TikTok, thread, atau notes harian.</p>
-          </div>
-          <div className="step-card">
-            <div className="step-num">02</div>
-            <div className="step-icon"><Palette className="size-5" /></div>
-            <h3>Pilih Tema</h3>
-            <p>Pilih dari berbagai tema, dari yang minimalis sampai yang bold.</p>
-          </div>
-          <div className="step-card">
-            <div className="step-num">03</div>
-            <div className="step-icon"><Upload className="size-5" /></div>
-            <h3>Download & Posting</h3>
-            <p>Ekspor dalam format 4:5, siap langsung upload ke Instagram, TikTok.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="section reveal">
-        <div className="section-tag">Kenapa Glito</div>
-        <h2 className="section-title">Bikin Konten<br />Gak Harus Siksa Diri</h2>
-        <p className="section-sub">Bukan pengganti kreativitas. Ini tool buat kamu yang benci kerjaan repetitif saat desain.</p>
-
-        <div className="benefits-grid">
-          <div className="benefit-card">
-            <div className="benefit-icon-wrap"><Zap className="size-5" /></div>
-            <div><h3>Bye-bye Kerja Repetitif</h3><p>Yang biasanya 2 jam geser-geser elemen di Canva, selesai dalam 60 detik. Waktumu terlalu berharga untuk sekadar atur margin.</p></div>
-          </div>
-          <div className="benefit-card">
-            <div className="benefit-icon-wrap"><Cpu className="size-5" /></div>
-            <div><h3>Ide &gt; Desain</h3><p>Fokus ke riset topik dan strategi marketing agar konten high-engagement. Urusan visual? Serahkan ke AI.</p></div>
-          </div>
-          <div className="benefit-card">
-            <div className="benefit-icon-wrap"><Smartphone className="size-5" /></div>
-            <div><h3>Harga Ramah, Hasil Instan</h3><p>Didesain khusus untuk creator Indonesia. Gak perlu langganan tool mahal untuk bisa konsisten posting setiap hari.</p></div>
-          </div>
-          <div className="benefit-card">
-            <div className="benefit-icon-wrap"><Rocket className="size-5" /></div>
-            <div><h3>Langsung Siap Posting</h3><p>Output berupa gambar siap upload. Tidak perlu export-import-convert lagi.</p></div>
-          </div>
-        </div>
-      </div>
-
-      <div className="section reveal">
-        <div className="founder-section">
-          <div>
-            <h2>Kenapa Gue Bikin Tool Ini</h2>
-            <p>Dulu gue spend 2-3 jam setiap kali bikin carousel buat konten. Buka Canva, pilih template, copy-paste teks satu-per-satu, atur layout, capek banget.</p>
-            <p>Gue kepikiran: "Harusnya ini bisa otomatis." Gue benci banget sama bagian repetitif dari desain. Gue pengen fokus di brainstorming ide, bukan di pixel-pushing.</p>
-            <p>Akhirnya gue bikin tool ini. Sekarang gue pakai sendiri setiap hari. Yang dulu 2 jam, sekarang cuma butuh 60 detik.</p>
-            <p><strong>Kalau gue gak yakin tool ini useful buat buang kerjaan repetitif, gue gak akan release.</strong></p>
-          </div>
-          <div className="founder-cta">
-            <p>Mau coba sendiri?</p>
-            <button className="btn-primary" onClick={() => navigate("/auth")}>Mulai Sekarang</button>
-          </div>
-        </div>
-      </div>
-
-      <div className="section reveal">
-        <div className="section-tag">FAQ</div>
-        <h2 className="section-title">Pertanyaan yang<br />sering ditanya</h2>
-        <div className="faq-list">
-          {FAQS.map((item) => <FaqItem key={item.q} q={item.q} a={item.a} />)}
-        </div>
-      </div>
-
-      <div className="bottom-cta reveal">
-        <div className="orb-bg" />
-        <div className="bottom-cta-content">
-          <h2>Berhenti jadi budak desain,<br />mulai jadi strategist.</h2>
-          <p>Coba dulu sebelum bayar apa pun.</p>
-          <button className="btn-primary" onClick={() => navigate("/auth")}>Coba Sekarang →</button>
-        </div>
-      </div>
-
-      <footer className="footer">
-        <p>© 2026 Glito. All rights reserved.</p>
       </footer>
     </div>
   )
 }
-
-const FAQS = [
-  {
-    q: "Tool ini cocok buat siapa?",
-    a: "Content creator dan social media manager yang benci kerjaan repetitif saat desain. Kalau kamu lebih suka ngulik desain sampai pixel-perfect, Canva tetap lebih cocok. Tool ini buat yang mau fokus ke ide konten dan posting cepat.",
-  },
-  {
-    q: "Apa bedanya dengan Canva?",
-    a: "CarouselAI fokus ke kecepatan dan penghapusan tugas repetitif. Masukkan ide, pilih tema, download. Canva lebih fleksibel tapi jauh lebih makan waktu.",
-  },
-  {
-    q: "Berapa lama prosesnya?",
-    a: "Biasanya selesai dalam 60 detik, tergantung jumlah slide dan panjang konten.",
-  },
-  {
-    q: "Apakah ada versi gratis untuk coba dulu?",
-    a: "Ada. Begitu daftar, kamu langsung dapat kredit gratis untuk validasi apakah tool ini cocok dengan alur kerjamu. Mau lebih banyak? Cek paket di halaman Pricing.",
-  },
-]

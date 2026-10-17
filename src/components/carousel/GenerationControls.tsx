@@ -58,13 +58,22 @@ export function GenerationControls({
         </div>
       )}
 
-      <div className={`rounded-3xl bg-white border dark:border-[#2e2e2e] dark:bg-[#242424] p-5 shadow-sm relative ${isExpanded ? 'w-full max-w-4xl h-[80vh]' : 'w-full'}`}>
+      <div className={`rounded-3xl bg-white border dark:border-[#2e2e2e] dark:bg-[#242424] p-5 shadow-sm relative w-full flex flex-col ${isExpanded ? 'max-w-4xl h-[80vh]' : ''}`}>
         <textarea
           ref={textareaRef}
-          className={`w-full resize-none border-none outline-none text-md bg-transparent ${isExpanded ? 'h-full' : 'h-[28px]'}`}
+          rows={1}
+          className={`w-full min-h-[24px] max-h-[160px] resize-none border-none outline-none text-md bg-transparent overflow-y-auto`}
+          style={{ height: isExpanded ? '100%' : '28px' }}
           placeholder={inputMode === 'topic' ? "Contoh: 5 peluang karir masa depan..." : "Tempel skrip lengkap Anda di sini..."}
           value={topic}
-          onChange={(e) => setTopic(e.target.value)}
+          onChange={(e) => {
+            setTopic(e.target.value);
+            if (!isExpanded) {
+              e.target.style.height = 'auto';
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+            }
+          }}
+          
         />
 
         {/* Tombol Expand */}

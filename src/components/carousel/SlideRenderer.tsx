@@ -30,7 +30,6 @@ export interface Slide {
   image_keyword: string
   svg_code?: string
   highlights?: string[]
-  highlight_bg?: string
   theme?: Theme
   items?: CardItem[]
 }
@@ -48,7 +47,6 @@ const DEFAULT_COMPOSITION: Composition = {
 
 function resolveComposition(composition: any): Composition {
   if (!composition) return DEFAULT_COMPOSITION
-
   const validAlignments = ["center", "left", "right"]
   const validFocus = ["headline", "body", "balanced"]
   const validStyles = ["floating", "minimalist", "bold", "card-grid", "card-flow"]
@@ -73,16 +71,12 @@ function resolveComposition(composition: any): Composition {
 
 function resolveTheme(theme: any): Theme {
   if (!theme) return DEFAULT_THEME
-  return {
-    ...DEFAULT_THEME,
-    ...theme,
-  }
+  return { ...DEFAULT_THEME, ...theme }
 }
 
 function getFontSize(text: string, max: number, min: number): string {
   const len = text.length
   if (len === 0) return `${min}px`
-
   if (len < 10) return `${max}px`
   if (len > 100) return `${min}px`
   const k = 0.008
@@ -91,46 +85,41 @@ function getFontSize(text: string, max: number, min: number): string {
 }
 
 function getLuminance(hexColor: string | undefined): number {
-  if (!hexColor) return 0;
-  const color = hexColor.replace("#", "");
-  let fullColor = color;
-  if (color.length === 3) {
-    fullColor = color.split("").map(char => char + char).join("");
-  }
-  if (fullColor.length !== 6) return 0;
-  const r = parseInt(fullColor.substring(0, 2), 16);
-  const g = parseInt(fullColor.substring(2, 4), 16);
-  const b = parseInt(fullColor.substring(4, 6), 16);
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  if (!hexColor) return 0
+  const color = hexColor.replace("#", "")
+  let fullColor = color
+  if (color.length === 3) fullColor = color.split("").map(c => c + c).join("")
+  if (fullColor.length !== 6) return 0
+  const r = parseInt(fullColor.substring(0, 2), 16)
+  const g = parseInt(fullColor.substring(2, 4), 16)
+  const b = parseInt(fullColor.substring(4, 6), 16)
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
 }
 
 function getContrastColor(hexColor: string | undefined): string {
-  const luminance = getLuminance(hexColor);
-  return luminance > 0.5 ? "#000000" : "#FFFFFF";
+  return getLuminance(hexColor) > 0.5 ? "#000000" : "#FFFFFF"
 }
 
-function HighlightedText({ text, highlights, color, bg, highlightTextColor }: { text: string; highlights?: string[]; color: string, bg?: string, highlightTextColor?: string }) {
+function HighlightedText({ text, highlights, color, bg, highlightTextColor }: { text: string; highlights?: string[]; color: string; bg?: string; highlightTextColor?: string }) {
   if (!highlights || highlights.length === 0) return <>{text}</>
-
-  const filteredHighlights = highlights.filter(h => h.length < text.length * 0.7)
-  if (filteredHighlights.length === 0) return <>{text}</>
-
-  const pattern = filteredHighlights.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
-  const regex = new RegExp(`(${pattern})`, 'gi')
+  const filtered = highlights.filter(h => h.length < text.length * 0.7)
+  if (filtered.length === 0) return <>{text}</>
+  const pattern = filtered.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")
+  const regex = new RegExp(`(${pattern})`, "gi")
   const parts = text.split(regex)
   return (
     <>
       {parts.map((part, i) => {
-        const isHighlight = filteredHighlights.some(h => h.toLowerCase() === part.toLowerCase())
+        const isHighlight = filtered.some(h => h.toLowerCase() === part.toLowerCase())
         return isHighlight ? (
           <span key={i} style={{
-            color: highlightTextColor || 'inherit',
+            color: highlightTextColor || "inherit",
             backgroundColor: bg || `${color}33`,
             padding: "2px 6px",
             borderRadius: "4px",
             fontWeight: 800,
-            boxDecorationBreak: 'clone',
-            WebkitBoxDecorationBreak: 'clone',
+            boxDecorationBreak: "clone",
+            WebkitBoxDecorationBreak: "clone",
           }}>
             {part}
           </span>
@@ -142,8 +131,6 @@ function HighlightedText({ text, highlights, color, bg, highlightTextColor }: { 
 
 function resolveIcon(keyword?: string) {
   const key = keyword?.trim() || ""
-  // Mencari ikon di LucideIcons. Karena Lucide menggunakan PascalCase (contoh: "Brain", "Rocket"),
-  // kita mencoba mencari key secara langsung.
   const Icon = (LucideIcons as any)[key]
   return Icon || LucideIcons.Sparkles
 }
@@ -179,16 +166,8 @@ function ItemCard({ item, theme }: { item: CardItem; theme: Theme }) {
 function CardFlowLayout({ items, theme, alignment }: { items: CardItem[]; theme: Theme; alignment: string }) {
   const justify = alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end"
   return (
-    <div style={{
-      display: "flex",
-      flexWrap: "wrap",
-      gap: "24px",
-      width: "100%",
-      justifyContent: justify
-    }}>
-      {items.map((item, i) => (
-        <ItemCard key={i} item={item} theme={theme} />
-      ))}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", width: "100%", justifyContent: justify }}>
+      {items.map((item, i) => <ItemCard key={i} item={item} theme={theme} />)}
     </div>
   )
 }
@@ -201,21 +180,23 @@ function CardGridLayout({ items, theme }: { items: CardItem[]; theme: Theme }) {
   )
 }
 
-function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentity }: { slide: Slide; theme: Theme; totalSlides: number; brandIdentity?: BrandIdentity }) {
+function AdaptiveLayout({
+  slide, theme: externalTheme, totalSlides, brandIdentity,
+}: {
+  slide: Slide
+  theme: Theme
+  totalSlides: number
+  brandIdentity?: BrandIdentity
+}) {
   const theme = resolveTheme(externalTheme)
   const composition = resolveComposition(slide.composition)
   const { alignment, focus, accent } = composition
-  const { highlight_bg } = slide
   const themeSvg = theme.svg_code
   const canvasPadding = "110px"
   const canvasHeight = "1350px"
   const contentHeight = "1212px"
 
-  // Hitung warna highlight final agar konsisten antara counter dan teks body
-  const bgLum = getLuminance(theme.bg);
-  const hbgLum = getLuminance(highlight_bg);
-  const isTooSimilar = highlight_bg && Math.abs(bgLum - hbgLum) < 0.15;
-  const finalHighlightBg = (highlight_bg && isTooSimilar) ? theme.accent : (highlight_bg || theme.accent);
+  const finalHighlightBg = theme.accent
 
   const alignmentStyles = {
     center: { justifyContent: "center", alignItems: "center", textAlign: "center" as const },
@@ -223,26 +204,35 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
     right: { justifyContent: "center", alignItems: "flex-end", textAlign: "right" as const },
   }
 
-  const focusStyles: Record<string, any> = {
-    headline: { titleMax: 85, titleMin: 60, bodyMax: 35, bodyMin: 25 },
-    body: { titleMax: 75, titleMin: 40, bodyMax: 45, bodyMin: 34 },
-    balanced: { titleMax: 75, titleMin: 42, bodyMax: 45, bodyMin: 34 },
+  function elementAlignStyle() {
+    return {
+      justifyContent: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end",
+      textAlign: alignment as "left" | "center" | "right",
+    }
   }
 
+  const focusStyles: Record<string, any> = {
+    headline: { titleMax: 85, titleMin: 60, bodyMax: 35, bodyMin: 25 },
+    body:     { titleMax: 75, titleMin: 40, bodyMax: 45, bodyMin: 34 },
+    balanced: { titleMax: 75, titleMin: 42, bodyMax: 45, bodyMin: 34 },
+  }
   const currentFocus = focusStyles[focus] || focusStyles.balanced
 
   const resolvedAccent =
     accent === "bold-serif" ? "pill" :
     accent === "clean-sans" ? "line" :
-    accent;
+    accent
 
-  // Logika posisi SVG diagonal berpasangan berdasarkan nomor slide
-  const isEven = slide.slide % 2 === 0;
+  const isEven = slide.slide % 2 === 0
   const svgPositions = isEven
-    ? [ { top: -90, right: -170 }, { bottom: -90, left: -170 } ]
-    : [ { top: -90, left: -170 }, { bottom: -90, right: -170 } ];
+    ? [{ top: -90, right: -170 }, { bottom: -90, left: -170 }]
+    : [{ top: -90, left: -170 }, { bottom: -90, right: -170 }]
 
   const headerSide = isEven ? "left" : "right"
+
+  const contentIsCards =
+    (composition.style === "card-grid" || composition.style === "card-flow") &&
+    slide.items && slide.items.length > 0
 
   return (
     <div style={{
@@ -260,89 +250,47 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
     }}>
       {themeSvg && svgPositions.map((pos, i) => (
         <div key={i} style={{
-          position: "absolute",
-          width: "500px",
-          height: "500px",
-          zIndex: 0,
-          opacity: 1,
-          color: theme.accent,
-          pointerEvents: "none",
-          ...pos
+          position: "absolute", width: "500px", height: "500px", zIndex: 0,
+          opacity: 1, color: theme.accent, pointerEvents: "none", ...pos,
         }}>
-          <div
-            style={{ width: "100%", height: "100%" }}
-            dangerouslySetInnerHTML={{ __html: themeSvg }}
-          />
+          <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: themeSvg }} />
         </div>
       ))}
-      {/* SVG per-slide tetap dipertahankan sebagai fallback atau layer tambahan jika ada */}
       {slide.svg_code && (
         <div style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          zIndex: 0,
-          opacity: 1,
-          color: theme.accent,
-          pointerEvents: "none",
+          position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 0,
+          opacity: 1, color: theme.accent, pointerEvents: "none",
         }}>
-          <div
-            style={{ width: "100%", height: "100%" }}
-            dangerouslySetInnerHTML={{ __html: slide.svg_code }}
-          />
+          <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: slide.svg_code }} />
         </div>
       )}
 
       {slide.slide > 1 && slide.slide < totalSlides && (
         <div style={{
-          position: "absolute",
-          top: "100px",
-          left: canvasPadding,
-          fontSize: "28px",
-          fontWeight: 600,
-          fontFamily: "monospace",
-          color: theme.textMuted,
-          letterSpacing: "2px",
-          zIndex: 30,
+          position: "absolute", top: "100px", left: canvasPadding,
+          fontSize: "28px", fontWeight: 600, fontFamily: "monospace",
+          color: theme.textMuted, letterSpacing: "2px", zIndex: 30,
         }}>
           {String(slide.slide).padStart(2, "0")} / {String(totalSlides).padStart(2, "0")}
         </div>
       )}
 
       <div style={{
-        width: "100%",
-        height: contentHeight,
-        display: "flex",
-        flexDirection: "column",
-        position: "relative",
-        zIndex: 10,
-        boxSizing: "border-box",
+        width: "100%", height: contentHeight, display: "flex", flexDirection: "column",
+        position: "relative", zIndex: 10, boxSizing: "border-box",
         ...alignmentStyles[alignment],
       }}>
         <div style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          gap: "30px",
-          position: "relative",
-          zIndex: 20,
+          width: "100%", height: "100%", display: "flex", flexDirection: "column",
+          justifyContent: "center", gap: "30px", position: "relative", zIndex: 20,
         }}>
-          
-          <div style={{
-            width: "100%",
-            display: "flex",
-            justifyContent: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end"
-          }}>
+          {/* Title */}
+          <div style={{ width: "100%", display: "flex", ...elementAlignStyle() }}>
             <h2 style={{
               fontSize: getFontSize(slide.title, currentFocus.titleMax, currentFocus.titleMin),
-              fontWeight: theme.fontWeight, color: theme.text, margin: 0, lineHeight: 1.2
-            }}>
-              {slide.title}
-            </h2>
+              fontWeight: theme.fontWeight, color: theme.text, margin: 0, lineHeight: 1.2,
+              whiteSpace: "pre-wrap",
+            }}>{slide.title}</h2>
           </div>
 
           {resolvedAccent === "line" && (
@@ -350,69 +298,60 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
               width: alignment === "center" ? "80px" : "60px",
               height: "8px", backgroundColor: theme.highlight,
               margin: "10px 0", borderRadius: "4px",
-              alignSelf: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end"
+              alignSelf: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end",
             }} />
           )}
 
-          {/* Body Section: card layout atau paragraf biasa, tergantung style */}
-          {(composition.style === "card-grid" || composition.style === "card-flow") && slide.items && slide.items.length > 0 ? (
-            composition.style === "card-grid" ? (
-              <CardGridLayout items={slide.items} theme={theme} />
+          {/* Content */}
+          <div style={{ width: "100%" }}>
+            {contentIsCards ? (
+              composition.style === "card-grid"
+                ? <CardGridLayout items={slide.items || []} theme={theme} />
+                : <CardFlowLayout items={slide.items || []} theme={theme} alignment={alignment} />
             ) : (
-              <CardFlowLayout items={slide.items} theme={theme} alignment={alignment} />
-            )
-          ) : (
+              <div style={{ width: "100%", display: "flex", ...elementAlignStyle() }}>
+                <p style={{
+                  fontSize: getFontSize(slide.body_text, currentFocus.bodyMax, currentFocus.bodyMin),
+                  color: theme.text, lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap",
+                }}>
+                  <HighlightedText
+                    text={slide.body_text}
+                    highlights={slide.highlights}
+                    color={theme.text}
+                    bg={finalHighlightBg}
+                    highlightTextColor={getContrastColor(finalHighlightBg)}
+                  />
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Geser button */}
+          {slide.slide === 1 && (
             <div style={{
-              width: "100%",
-              display: "flex",
-              justifyContent: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end",
+              alignSelf: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end",
+              marginTop: "20px",
             }}>
-              <p style={{
-                fontSize: getFontSize(slide.body_text, currentFocus.bodyMax, currentFocus.bodyMin),
-                color: theme.text, lineHeight: 1.6, margin: 0,
+              <div style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                backgroundColor: finalHighlightBg, color: getContrastColor(finalHighlightBg),
+                padding: "10px 20px", borderRadius: "100px", border: `1px solid ${theme.accent}44`,
+                fontSize: "25px", fontWeight: 600, zIndex: 50,
+                boxShadow: `0 4px 12px ${theme.accent}22`,
               }}>
-                <HighlightedText
-                  text={slide.body_text}
-                  highlights={slide.highlights}
-                  color={theme.text}
-                  bg={finalHighlightBg}
-                  highlightTextColor={getContrastColor(finalHighlightBg)}
-                />
-              </p>
+                <span>Geser</span>
+                <LucideIcons.ChevronRight size={30} color={getContrastColor(finalHighlightBg)} strokeWidth={2.5} />
+              </div>
             </div>
           )}
 
-          {slide.slide === 1 && (
+          {/* Brand */}
+          {brandIdentity?.show && (brandIdentity.handle || brandIdentity.website) &&
+           (slide.slide === 1 || slide.slide === totalSlides) && (
             <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              backgroundColor: finalHighlightBg,
-              color: getContrastColor(finalHighlightBg),
-              padding: "10px 20px",
-              borderRadius: "100px",
-              border: `1px solid ${theme.accent}44`,
-              fontSize: "25px",
-              fontWeight: 600,
-              zIndex: 50,
-              boxShadow: `0 4px 12px ${theme.accent}22`,
-              alignSelf: alignment === "center" ? "center" : alignment === "left" ? "flex-start" : "flex-end",
-              marginTop: "20px"
-            }}>
-              <span>Geser</span>
-              <LucideIcons.ChevronRight size={30} color={getContrastColor(finalHighlightBg)} strokeWidth={2.5} />
-            </div>
-          )}
-          {brandIdentity?.show && (brandIdentity.handle || brandIdentity.website) && (slide.slide === 1 || slide.slide === totalSlides) && (
-            <div style={{
-              position: "absolute",
-              top: "50px",
-              left: "30px",
-              right: "30px",
-              display: "flex",
-              justifyContent: headerSide === "left" ? "flex-start" : "flex-end",
-              zIndex: 30,
-              pointerEvents: "none",
+              position: "absolute", top: "50px", left: "30px", right: "30px",
+              display: "flex", justifyContent: headerSide === "left" ? "flex-start" : "flex-end",
+              zIndex: 30, pointerEvents: "none",
             }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "4px", textAlign: headerSide === "left" ? "left" : "right" }}>
                 {brandIdentity.handle && (
@@ -429,15 +368,10 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
             </div>
           )}
 
+          {/* Watermark */}
           <div style={{
-            position: "absolute",
-            bottom: "50px",
-            left: 0,
-            right: 0,
-            display: "flex",
-            justifyContent: "center",
-            zIndex: 25,
-            pointerEvents: "none",
+            position: "absolute", bottom: "50px", left: 0, right: 0,
+            display: "flex", justifyContent: "center", zIndex: 25, pointerEvents: "none",
           }}>
             <span style={{ fontSize: "18px", fontWeight: 500, color: theme.textMuted, opacity: 0.6 }}>
               {TOOL_WATERMARK}
@@ -448,28 +382,15 @@ function AdaptiveLayout({ slide, theme: externalTheme, totalSlides, brandIdentit
     </div>
   )
 }
-export function PreviewScaleWrapper({
-  children,
-  width
-}: {
-  children: React.ReactNode;
-  width: number
-}) {
+
+export function PreviewScaleWrapper({ children, width }: { children: React.ReactNode; width: number }) {
   const scale = width / 1080
   const height = width * (1350 / 1080)
   return (
-    <div style={{
-      width: `${width}px`,
-      height: `${height}px`,
-      position: "relative",
-      overflow: "hidden"
-    }}>
+    <div style={{ width: `${width}px`, height: `${height}px`, position: "relative", overflow: "hidden" }}>
       <div style={{
-        width: "1080px",
-        height: "1350px",
-        transform: `scale(${scale})`,
-        transformOrigin: "top left",
-        pointerEvents: "none"
+        width: "1080px", height: "1350px",
+        transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none",
       }}>
         {children}
       </div>
@@ -477,7 +398,14 @@ export function PreviewScaleWrapper({
   )
 }
 
-export function SlideRenderer({ slide, theme: externalTheme, totalSlides, brandIdentity }: { slide: Slide; theme?: Theme; totalSlides: number; brandIdentity?: BrandIdentity }) {
-  const activeTheme = resolveTheme(externalTheme || slide.theme);
+export function SlideRenderer({
+  slide, theme: externalTheme, totalSlides, brandIdentity,
+}: {
+  slide: Slide
+  theme?: Theme
+  totalSlides: number
+  brandIdentity?: BrandIdentity
+}) {
+  const activeTheme = resolveTheme(externalTheme || slide.theme)
   return <AdaptiveLayout slide={slide} theme={activeTheme} totalSlides={totalSlides} brandIdentity={brandIdentity} />
 }
