@@ -5,12 +5,12 @@ import { deriveDefaultHandle } from "@/lib/brandDefaults"
 import { trackEvent } from "@/lib/trackerEvent"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { SlideRenderer, type Slide, type BrandIdentity } from "@/components/carousel/SlideRenderer"
+import { SlideRenderer, type Slide, type BrandIdentity, type ElementLayout } from "@/components/carousel/SlideRenderer"
 import { GenerationControls } from "@/components/carousel/GenerationControls"
 import { PRESET_THEMES, type Theme } from "@/lib/themes"
 import { exportPNG, exportPDF } from "@/lib/export"
 import { ImageIcon, FileText, ChevronLeft, ChevronRight, Plus, Minus, Maximize2 } from "lucide-react"
-import { parseError } from "@/lib/utils"
+import { parseError, loadJSON, saveJSON } from "@/lib/utils"
 
 // Canvas Workspace
 const MIN_ZOOM = 0.2
@@ -35,7 +35,8 @@ function CanvasWorkspace({ first, all, children }: {
     setView({ zoom, x: (width - target.w * zoom) / 2, y: (height - target.h * zoom) / 2 })
   }
 
-  useLayoutEffect(() => { fitTo(first) }, [])
+  // sengaja hanya saat mount: fit ke slide pertama
+  useLayoutEffect(() => { fitTo(first) }, []) // eslint-disable-line
 
   function zoomAt(px: number, py: number, factor: number) {
     setView(v => {
@@ -59,7 +60,7 @@ function CanvasWorkspace({ first, all, children }: {
       e.preventDefault()
       const r = el!.getBoundingClientRect()
       if (e.ctrlKey || e.metaKey) {
-        zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.01))
+        zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.001))
       } else {
         setView(v => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }))
       }
@@ -75,7 +76,12 @@ function CanvasWorkspace({ first, all, children }: {
 
   function onPointerDown(e: React.PointerEvent) {
     const t = e.target as HTMLElement
+    // jangan ganggu UI
     if (t.closest("button, input, textarea, select, [contenteditable=\"true\"]")) return
+    // jangan ganggu konva (slide / element didalamnya)
+    // biarin konva yang handle klik, select, dan drag element
+    if (t.closest("canvas")) return
+    // baru boleh pan kalo klik di area kosong Workspace
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     e.currentTarget.setPointerCapture(e.pointerId)
     if (pointers.current.size === 2) lastPinch.current = measurePinch()
@@ -108,14 +114,14 @@ function CanvasWorkspace({ first, all, children }: {
 
   function onPointerUp(e: React.PointerEvent) {
     pointers.current.delete(e.pointerId)
-    lastPinch.current = null
+    if (pointers.current.size < 2) lastPinch.current = null
   }
 
   const level = Math.log2(1 / view.zoom)
   const levelFloor = Math.floor(level)
   const fade = level - levelFloor
-  const spacingFine = 24 * Math.pow(2, levelFloor - 1)
-  const spacingCoarse = 24 * Math.pow(2, levelFloor)
+  const spacingFine = 40 * Math.pow(2, levelFloor - 1)
+  const spacingCoarse = 40 * Math.pow(2, levelFloor)
 
   return (
     <div
@@ -164,11 +170,15 @@ function CanvasWorkspace({ first, all, children }: {
 
 // ==================####==================
 
-function SlideCard({ slide, theme, totalSlides, brandIdentity }: {
+function SlideCard({ slide, slideIndex, theme, totalSlides, brandIdentity, selectedId, onSelect, onLayoutChange }: {
   slide: Slide
+  slideIndex: number
   theme: Theme
   totalSlides: number
   brandIdentity?: BrandIdentity
+  selectedId?: string | null
+  onSelect?: (id: string | null) => void
+  onLayoutChange?: (elementId: string, layout: ElementLayout) => void
 }) {
   const [containerWidth, setContainerWidth] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
@@ -182,13 +192,10 @@ function SlideCard({ slide, theme, totalSlides, brandIdentity }: {
     return () => observer.disconnect()
   }, [])
 
-  const cardScale = containerWidth / 1080
-
   return (
     <div ref={ref} className="relative overflow-hidden bg-white rounded-2xl shadow-md w-full" style={{ aspectRatio: "4/5" }}>
-      <div className="origin-top-left" style={{ transform: `scale(${cardScale})`, width: "1080px", height: "1350px" }}>
-        <SlideRenderer slide={slide} theme={theme} totalSlides={totalSlides} brandIdentity={brandIdentity} />
-      </div>
+      <SlideRenderer
+        slide={slide} theme={theme} totalSlides={totalSlides} brandIdentity={brandIdentity} displayWidth={containerWidth} editable={true} selectedId={selectedId} onSelect={onSelect} onLayoutChange={onLayoutChange} />
     </div>
   )
 }
@@ -205,15 +212,10 @@ const CARD_GAP = 48
 export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorPageProps) {
   const [topic, setTopic] = useState(() => localStorage.getItem("gen_topic") || "")
   const [slideCount, setSlideCount] = useState<number>(5)
-  const [slides, setSlides] = useState<Slide[]>(() => {
-    const saved = localStorage.getItem("gen_slides")
-    return saved ? JSON.parse(saved) : []
-  })
+  const [slides, setSlides] = useState<Slide[]>(() => loadJSON("gen_slides", []))
+  const [selection, setSelection] = useState<{ slideIndex: number; elementId: string } | null>(null)
   const [loading, setLoading] = useState(false)
-  const [selectedTheme, setSelectedTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem("gen_theme")
-    return saved ? JSON.parse(saved) : PRESET_THEMES[0]
-  })
+  const [selectedTheme, setSelectedTheme] = useState<Theme>(() => loadJSON("gen_theme", PRESET_THEMES[0]))
   const [exportingPNG, setExportingPNG] = useState(false)
   const [exportingPDF, setExportingPDF] = useState(false)
   const cancelRefPNG = useRef(false)
@@ -224,10 +226,22 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
   const [userEmail, setUserEmail] = useState<string>("")
   const [inputMode, setInputMode] = useState<"topic" | "script">("topic")
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const resolvedHandle = brandSettings?.display_handle || (userEmail ? deriveDefaultHandle(userEmail) : "")
+  const [brandIdentity, setBrandIdentity] = useState<BrandIdentity>({
+    show: true,
+    handle: "Data Frame",
+    website: "https://glito.vercel.app",
+  })
+  
+  useEffect(() => {
+    if (resolvedHandle) {
+      setBrandIdentity(prev => (prev.handle === "Data Frame" ? { ...prev, handle: resolvedHandle } : prev))
+    }
+  }, [resolvedHandle])
 
   useEffect(() => { localStorage.setItem("gen_topic", topic) }, [topic])
-  useEffect(() => { localStorage.setItem("gen_slides", JSON.stringify(slides)) }, [slides])
-  useEffect(() => { localStorage.setItem("gen_theme", JSON.stringify(selectedTheme)) }, [selectedTheme])
+  useEffect(() => saveJSON("gen_slides", slides), [slides])
+  useEffect(() => saveJSON("gen_theme", selectedTheme), [selectedTheme])
 
   useEffect(() => {
     getBrandSettings().then(setBrandSettings).catch(() => setBrandSettings(null))
@@ -254,7 +268,12 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
           "Content-Type": "application/json",
         },
       })
-      if (error) throw new Error(JSON.stringify(error))
+      if (error) {
+        throw new Error(
+          typeof error === "string" ? error
+          : error.message ?? "Gagal menghubungi server"
+        )
+      }
       setSlides(data.slides)
       setSelectedTheme(data.theme)
       await saveCarousel(topic, data)
@@ -295,6 +314,13 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     }
   }
 
+  // tambahan modifikasi
+  function handleLayoutChange(slideIndex: number, elementId: string, layout: ElementLayout) {
+    setSlides(prev => prev.map((s, i) =>
+      i !== slideIndex ? s : { ...s, layout: { ...s.layout, [elementId]: layout } }
+    ))
+  }
+
   function handleCancelExportPNG() { cancelRefPNG.current = true }
 
   async function handleExportPDF() {
@@ -322,17 +348,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
 
   function handleCancelExportPDF() { cancelRefPDF.current = true }
 
-  const resolvedHandle = brandSettings?.display_handle || (userEmail ? deriveDefaultHandle(userEmail) : "")
-  const [brandIdentity, setBrandIdentity] = useState<BrandIdentity>({
-    show: true,
-    handle: "Data Frame",
-    website: "https://glito.vercel.app",
-  })
-  useEffect(() => {
-    if (resolvedHandle) {
-      setBrandIdentity(prev => (prev.handle === "Data Frame" ? { ...prev, handle: resolvedHandle } : prev))
-    }
-  }, [resolvedHandle])
+  
 
   return (
     <div className="relative w-full min-h-screen">
@@ -348,10 +364,13 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                 {slides.map((s, i) => (
                   <div key={i} style={{ width: CARD_W }}>
                     <SlideCard
-                      slide={s}
+                      slide={s} slideIndex={i}
                       theme={selectedTheme}
                       totalSlides={slides.length}
                       brandIdentity={brandIdentity}
+                      selectedId={selection?.slideIndex === i ? selection.elementId : null}
+                      onSelect={(id) => setSelection(id ? { slideIndex: i, elementId: id } : null)}
+                      onLayoutChange={(elementId, layout) => handleLayoutChange(i, elementId, layout)}
                     />
                   </div>
                 ))}
@@ -463,6 +482,76 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                     </div>
                   ))}
                 </div>
+
+                {selection && (selection.elementId === "title" || selection.elementId === "content") && (
+                  <div className="flex flex-col gap-2 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Ukuran Teks</span>
+                      <span className="text-xs text-gray-500">
+                        {slides[selection.slideIndex]?.layout?.[selection.elementId]?.fontSize ?? "auto"}px
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={16} max={120} step={1}
+                      value={
+                        slides[selection.slideIndex]?.layout?.[selection.elementId]?.fontSize
+                        ?? (selection.elementId === "title" ? 75 : 45)
+                      }
+                      onChange={(e) => {
+                        // const fontSize = Number(e.target.value)
+                        // const cur = slides[selection.slideIndex]?.layout?.[selection.elementId] ?? { x: 0, y: 0 }
+                        handleLayoutChange(selection.slideIndex, selection.elementId, {
+                          fontSize: Number(e.target.value),
+                        })
+                      }}
+                      className="w-full accent-purple-600"
+                    />
+                  </div>
+                )}
+
+                {/* Custom color */}
+                <div className="flex flex-col gap-2 pt-4 border-t">
+                  <span className="text-sm font-medium text-gray-700">Warna Custom</span>
+                  <div className="flex flex-col gap-2">
+                    {(["bg", "bgAlt", "text", "textMuted", "accent", "highlight"] as const).map((field) => (
+                      <div key={field} className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">{field}</span>
+                        <input
+                          type="color"
+                          value={selectedTheme?.[field] || "#000000"}
+                          onChange={(e) => setSelectedTheme(prev => ({ ...prev, [field]: e.target.value }))}
+                          className="w-9 h-9 rounded border cursor-pointer"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Perataan teks */}
+                {selection && (selection.elementId === "title" || selection.elementId === "content") && (
+                  <div className="flex flex-col gap-2 pt-4 border-t">
+                    <span className="text-sm font-medium text-gray-700">Perataan Teks</span>
+                    <div className="flex gap-1">
+                      {(["left", "center", "right"] as const).map((a) => {
+                        const curLayout = slides[selection.slideIndex]?.layout?.[selection.elementId]
+                        const isActive = (curLayout as any)?.align === a
+                        return (
+                          <button
+                            key={a}
+                            onClick={() => handleLayoutChange(selection.slideIndex, selection.elementId, {
+                              ...(curLayout ?? { x: 0, y: 0 }),
+                              align: a,
+                            } as any)}
+                            className={`flex-1 py-2 rounded-lg border text-xs ${isActive ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600"}`}
+                          >
+                            {a === "left" ? "Kiri" : a === "center" ? "Tengah" : "Kanan"}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </>

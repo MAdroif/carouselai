@@ -1,4 +1,4 @@
-import { useState, useRef } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Loader2, Minus, Plus, Repeat, Minimize2, Maximize2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -21,7 +21,6 @@ export function GenerationControls({
   inputMode, setInputMode
 }: GenerationControlsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedTheme, setSelectedTheme] = useState<string>("Edukasi & Psikologi")
 
   const toggleMode = () => {
@@ -60,7 +59,6 @@ export function GenerationControls({
 
       <div className={`rounded-3xl bg-white border dark:border-[#2e2e2e] dark:bg-[#242424] p-5 shadow-sm relative w-full flex flex-col ${isExpanded ? 'max-w-4xl h-[80vh]' : ''}`}>
         <textarea
-          ref={textareaRef}
           rows={1}
           className={`w-full min-h-[24px] max-h-[160px] resize-none border-none outline-none text-md bg-transparent overflow-y-auto`}
           style={{ height: isExpanded ? '100%' : '28px' }}
@@ -112,10 +110,10 @@ export function GenerationControls({
              
              {inputMode === 'topic' && (
                <div className="flex items-center gap-2 border dark:border-[#2e2e2e] rounded-xl px-3">
-                 <span className="text-xs font-medium dark:text-[#f0f0f0]">Slide:</span>
-                 <button className="text-slate-400 hover:text-[#f0f0f0]" onClick={() => setSlideCount(Math.max(3, slideCount - 1))}><Minus size={14} /></button>
+                 <span className="text-xs font-medium dark:text-slate-700">Slide:</span>
+                 <button className="text-slate-400 hover:text-slate-700" onClick={() => setSlideCount(Math.max(3, slideCount - 1))}><Minus size={14} /></button>
                  <span className="text-sm font-semibold w-4 text-center">{slideCount}</span>
-                 <button className="text-[#f0f0f0] hover:text-[#f0f0f0]" onClick={() => setSlideCount(Math.min(10, slideCount + 1))}><Plus size={14} /></button>
+                 <button className="text-slate-400 hover:text-slate-700" onClick={() => setSlideCount(Math.min(10, slideCount + 1))}><Plus size={14} /></button>
                </div>
              )}
           </div>

@@ -1,156 +1,153 @@
+// @/lib/export.ts
 import React from "react"
 import { createRoot } from "react-dom/client"
-import html2canvas from "html2canvas-pro"
-import * as htmlToImage from "html-to-image"
-import JSZip from "jszip"
-import { saveAs } from "file-saver"
-import { jsPDF } from "jspdf"
+import { flushSync } from "react-dom"
+import Konva from "konva"
+import jsPDF from "jspdf"
+import { SlideRenderer, CANVAS_W, CANVAS_H, type Slide, type BrandIdentity } from "@/components/carousel/SlideRenderer"
 import type { Theme } from "@/lib/themes"
-import { type Slide, SlideRenderer, type BrandIdentity } from "@/components/carousel/SlideRenderer"
 
-const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, taskName: string): Promise<T> => {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`Timeout: ${taskName} took too long (> ${timeoutMs}ms)`)), timeoutMs)
+const FONT_FAMILY = "Plus Jakarta Sans"
+const FONT_WEIGHTS = [400, 500, 600, 700, 800]
+const PIXEL_RATIO = 2   // 2160 × 2700, kualitas cetak
+
+// ─── Preload font sekali ────────────────────────────────────────────────────
+let fontsPromise: Promise<void> | null = null
+function ensureFontsLoaded(): Promise<void> {
+  if (fontsPromise) return fontsPromise
+  fontsPromise = (async () => {
+    if (typeof document === "undefined" || !document.fonts) return
+    await Promise.all(
+      FONT_WEIGHTS.map((w) => document.fonts.load(`${w} 60px "${FONT_FAMILY}"`)),
     )
-  ])
+    await document.fonts.ready
+  })()
+  return fontsPromise
 }
 
-export async function renderHiddenSlideLegacy(slide: Slide, theme: Theme, totalSlides: number, brandIdentity?: BrandIdentity, signal?: AbortSignal) {
-  const container = document.createElement("div")
-  container.style.position = "absolute"
-  container.style.left = "-9999px"
-  container.style.top = "0"
-  container.style.width = "1080px"
-  container.style.height = "1350px"
-  container.style.background = "#ffffff"
-  document.body.appendChild(container)
+// ─── Render 1 slide ke Konva Stage offscreen → ambil dataURL ───────────────
+async function renderSlideToDataURL(
+  slide: Slide,
+  theme: Theme,
+  totalSlides: number,
+  brandIdentity?: BrandIdentity,
+): Promise<string> {
+  await ensureFontsLoaded()
 
-  const root = createRoot(container)
-  root.render(
-    React.createElement(
-      "div",
-      { className: "w-[1080px] h-[1350px] bg-white overflow-hidden" },
-      React.createElement(SlideRenderer, { slide, theme, totalSlides, brandIdentity })
-    )
-  )
+  // Container tersembunyi di luar layar
+  const host = document.createElement("div")
+  Object.assign(host.style, {
+    position: "fixed",
+    left: "-99999px",
+    top: "0",
+    width: `${CANVAS_W}px`,
+    height: `${CANVAS_H}px`,
+    pointerEvents: "none",
+  })
+  document.body.appendChild(host)
 
-  await new Promise((resolve) => setTimeout(resolve, 800))
+  return new Promise<string>((resolve, reject) => {
+    const stageRef = React.createRef<Konva.Stage>()
+    const root = createRoot(host)
 
-  try {
-    const canvas = await withTimeout(
-      html2canvas(container, {
-        scale: 1,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-      }),
-      15000,
-      "html2canvas rendering"
-    )
-    if (signal?.aborted) {
-      root.unmount()
-      document.body.removeChild(container)
-      throw new Error("Aborted")
-    }
+    flushSync(() => {
+      root.render(
+        React.createElement(SlideRenderer, {
+          slide,
+          theme,
+          totalSlides,
+          brandIdentity,
+          displayWidth: CANVAS_W,
+          stageRef,
+        })
+      )
+    })
 
-    root.unmount()
-    document.body.removeChild(container)
-    return canvas
-  } catch (error) {
-    root.unmount()
-    document.body.removeChild(container)
-    throw error
-  }
+    // Beri satu frame buat Konva selesai mount dan gambar
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          const stage = stageRef.current
+          if (!stage) throw new Error("Stage tidak ditemukan")
+
+          const dataURL = stage.toDataURL({ pixelRatio: PIXEL_RATIO })
+          resolve(dataURL)
+        } catch (err) {
+          reject(err)
+        } finally {
+          root.unmount()
+          document.body.removeChild(host)
+        }
+      })
+    })
+  })
 }
 
-export async function renderHiddenSlide(slide: Slide, theme: Theme, totalSlides: number, brandIdentity?: BrandIdentity, signal?: AbortSignal) {
-  const container = document.createElement("div")
-  container.style.position = "fixed"
-  container.style.top = "0"
-  container.style.left = "0"
-  container.style.width = "1080px"
-  container.style.height = "1350px"
-  container.style.opacity = "0"
-  container.style.pointerEvents = "none"
-  container.style.zIndex = "-1000"
-  container.style.background = "#ffffff"
-  document.body.appendChild(container)
-
-  const root = createRoot(container)
-  root.render(
-    React.createElement(
-      "div",
-      {
-        className: "w-[1080px] h-[1350px] bg-white overflow-hidden",
-        style: { width: '1080px', height: '1350px' }
-      },
-      React.createElement(SlideRenderer, { slide, theme, totalSlides, brandIdentity })
-    )
-  )
-
-  if (signal?.aborted) throw new Error("Aborted");
-  await new Promise((resolve) => setTimeout(resolve, 1200));
-  if (signal?.aborted) throw new Error("Aborted");
-
-  try {
-    if (!container.innerHTML || container.children.length === 0) {
-      throw new Error("Container is empty");
-    }
-
-    const canvas = await withTimeout(
-      htmlToImage.toCanvas(container, {
-        width: 1080,
-        height: 1350,
-        style: {
-          opacity: '1',
-          visibility: 'visible',
-        },
-        pixelRatio: 1,
-      }),
-      15000,
-      "html-to-image rendering"
-    )
-
-    if (signal?.aborted) {
-      root.unmount()
-      document.body.removeChild(container)
-      throw new Error("Aborted")
-    }
-
-    root.unmount()
-    document.body.removeChild(container)
-    return canvas
-  } catch (error) {
-    console.error("Export failed, falling back to legacy", error)
-    root.unmount()
-    document.body.removeChild(container)
-    return await renderHiddenSlideLegacy(slide, theme, totalSlides, brandIdentity, signal)
-  }
-}
-
-export async function exportPNG(slides: Slide[], theme: Theme, brandIdentity: BrandIdentity, onProgress?: (p: number) => void, signal?: AbortSignal) {
+// ─── Export PNG ─────────────────────────────────────────────────────────────
+export async function exportPNG(
+  slides: Slide[],
+  theme: Theme,
+  brandIdentity: BrandIdentity,
+  onProgress?: (progress: number) => void,
+  cancelRef?: { cancelled: boolean },
+): Promise<void> {
+  const JSZip = (await import("jszip")).default
   const zip = new JSZip()
-  for (let i = 0; i < slides.length; i++) {
-    if (signal?.aborted) throw new Error("Aborted")
-    if (onProgress) onProgress(Math.round(((i + 1) / slides.length) * 100))
-    const canvas = await renderHiddenSlide(slides[i], theme, slides.length, brandIdentity, signal)
-    const imgData = canvas.toDataURL("image/png").split(",")[1]
-    zip.file(`slide-${i + 1}.png`, imgData, { base64: true })
+  const total = slides.length
+
+  for (let i = 0; i < total; i++) {
+    if (cancelRef?.cancelled) return
+
+    const dataURL = await renderSlideToDataURL(slides[i], theme, total, brandIdentity)
+    if (cancelRef?.cancelled) return
+
+    // Potong "data:image/png;base64," untuk dimasukkan ke zip
+    const base64 = dataURL.split(",")[1]
+    zip.file(`slide-${String(i + 1).padStart(2, "0")}.png`, base64, { base64: true })
+
+    onProgress?.(Math.round(((i + 1) / total) * 90))
   }
-  const content = await zip.generateAsync({ type: "blob" })
-  saveAs(content, "slides.zip")
+
+  if (cancelRef?.cancelled) return
+
+  const blob = await zip.generateAsync({ type: "blob" })
+  const link = document.createElement("a")
+  link.download = "glito-carousel.zip"
+  link.href = URL.createObjectURL(blob)
+  link.click()
+  URL.revokeObjectURL(link.href)
+
+  onProgress?.(100)
 }
 
-export async function exportPDF(slides: Slide[], theme: Theme, brandIdentity: BrandIdentity, onProgress?: (p: number) => void, signal?: AbortSignal) {
-  const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [1080, 1350] })
-  for (let i = 0; i < slides.length; i++) {
-    if (signal?.aborted) throw new Error("Aborted")
-    if (onProgress) onProgress(Math.round(((i + 1) / slides.length) * 100))
-    const canvas = await renderHiddenSlide(slides[i], theme, slides.length, brandIdentity, signal)
-    if (i > 0) pdf.addPage([1080, 1350])
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 1080, 1350)
+// ─── Export PDF ─────────────────────────────────────────────────────────────
+export async function exportPDF(
+  slides: Slide[],
+  theme: Theme,
+  brandIdentity: BrandIdentity,
+  onProgress?: (progress: number) => void,
+  cancelRef?: { cancelled: boolean },
+): Promise<void> {
+  const total = slides.length
+  const exportW = CANVAS_W * PIXEL_RATIO
+  const exportH = CANVAS_H * PIXEL_RATIO
+
+  // jsPDF: ukuran dalam mm, 1px = 0.2646mm
+  const mmW = exportW * 0.2646
+  const mmH = exportH * 0.2646
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [mmW, mmH] })
+
+  for (let i = 0; i < total; i++) {
+    if (cancelRef?.cancelled) return
+
+    const dataURL = await renderSlideToDataURL(slides[i], theme, total, brandIdentity)
+    if (cancelRef?.cancelled) return
+
+    if (i > 0) pdf.addPage([mmW, mmH])
+    pdf.addImage(dataURL, "PNG", 0, 0, mmW, mmH)
+
+    onProgress?.(Math.round(((i + 1) / total) * 100))
   }
-  pdf.save("carousel.pdf")
+
+  pdf.save("glito-carousel.pdf")
 }

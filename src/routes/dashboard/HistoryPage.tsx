@@ -7,7 +7,7 @@ CheckSquare, Square, MoreVertical, FileImage, FileText, AlertCircle } from "luci
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { SlideRenderer, PreviewScaleWrapper } from "@/components/carousel/SlideRenderer"
+import { SlideRenderer } from "@/components/carousel/SlideRenderer"
 import { exportPNG, exportPDF } from "@/lib/export"
 import { parseError } from "@/lib/utils"
 
@@ -294,14 +294,13 @@ export function HistoryPage() {
               
                   <div className="relative flex items-center justify-center overflow-hidden min-h-[400px] border-y border-slate-200 dark:border-slate-700 bg-slate-100">
                     <div className="w-full aspect-[4/5] flex items-center justify-center">
-                      <PreviewScaleWrapper width={384}>
-                        <SlideRenderer
-                          slide={currentSlide}
-                          theme={theme}
-                          totalSlides={slides.length}
-                          brandIdentity={brandIdentity}
-                        />
-                      </PreviewScaleWrapper>
+                      <SlideRenderer
+                        slide={currentSlide}
+                        theme={theme}
+                        totalSlides={slides.length}
+                        brandIdentity={brandIdentity}
+                        displayWidth={384}
+                      />
                     </div>
 
                     <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 flex justify-between">
