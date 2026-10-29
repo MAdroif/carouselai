@@ -283,7 +283,6 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
     autoSaveTimer.current = setTimeout(async () => {
       try {
-        const hasLayout = slides.some(s => s.layout && Object.keys(s.layout).length > 0)
         await updateCarousel(currentCarouselId, { slides, theme: selectedTheme })
       } catch (e) {
       }
