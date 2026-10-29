@@ -266,9 +266,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     brandSaveTimer.current = setTimeout(async () => {
       try {
         await upsertBrandSettings(brandIdentity.handle, brandIdentity.website)
-        toast.success("Brand saved") //DEBUG sementara
       } catch (e: any) {
-        toast.error("Brand error: " + e.message)
         // silent fail
       }
     }, 2000)
@@ -287,10 +285,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
       try {
         const hasLayout = slides.some(s => s.layout && Object.keys(s.layout).length > 0)
         await updateCarousel(currentCarouselId, { slides, theme: selectedTheme })
-        //DEBUG sementara
-        toast.success(hasLayout ? "Auto-saved dengan layout" : "Auto-saved TANPA layout")
       } catch (e) {
-        console.error("Auto-save gagal:", e)
       }
     }, 2000)
     return () => {
@@ -337,10 +332,6 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
       if (saved?.[0]?.id) {
         setCurrentCarouselId(saved[0].id)
         saveJSON("gen_carousel_id", saved[0].id)
-        //DEBUG sementara
-        toast.success(`ID: ${saved[0].id.slice(0, 8)}...`)
-      } else {
-        toast.error("ID tidak dapat, auto-save tidak aktif")
       }
       onTokensChange()
       trackEvent("carousel_generation_completed", {
@@ -387,8 +378,6 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     setSlides(prev => prev.map((s, i) =>
       i !== slideIndex ? s : { ...s, layout: { ...s.layout, [elementId]: layout } }
     ))
-    //DEBUG sementara
-    toast.info(`Layout update: slide ${slideIndex}, ${elementId}`)
   }
 
   function handleCancelExportPNG() { cancelRefPNG.current = true }
