@@ -39,7 +39,7 @@ export function HistoryPage() {
   const [isSelectionMode, setIsSelectionMode] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const pressTimer = useRef<NodeJS.Timeout | null>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const cancelRef = useRef<{ cancelled: boolean }>({ cancelled: false })
 
   const handlePressStart = (id: string) => {
     if (isSelectionMode) return
@@ -117,23 +117,29 @@ export function HistoryPage() {
   const handleExport = async (type: 'png' | 'pdf') => {
     if (!selectedHistory?.content) return
     setShowExportMenu(false)
-    abortControllerRef.current = new AbortController();
-    const signal = abortControllerRef.current.signal;
-
     if (!slides || slides.length === 0) return;
+
+    cancelRef.current.cancelled = false
 
     try {
       setIsExporting(true)
       setExportProgress(0)
       if (type === 'png') {
-        await exportPNG(slides, theme, brandIdentity, setExportProgress, signal)
+        await exportPNG(slides, theme, brandIdentity, setExportProgress, cancelRef.current)
       } else {
-        await exportPDF(slides, theme, brandIdentity, setExportProgress, signal)
+        await exportPDF(slides, theme, brandIdentity, setExportProgress, cancelRef.current)
       }
-      toast.success(`Berhasil export ${type.toUpperCase()}`)
+      if (cancelRef.current.cancelled) {
+        toast.info("Export dibatalkan")
+      } else {
+        toast.success(`Berhasil export ${type.toUpperCase()}`)
+      }
     } catch (err: any) {
-      if (err.message === "Aborted") return;
-      toast.error(`Gagal export ${type.toUpperCase()}`)
+      if (cancelRef.current.cancelled) {
+        toast.info("Export dibatalkan")
+      } else {
+        toast.error(`Gagal export ${type.toUpperCase()}`)
+      }
     } finally {
       setIsExporting(false)
       setExportProgress(0)
@@ -141,12 +147,7 @@ export function HistoryPage() {
   }
 
   function handleCancelExport() {
-    if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-    }
-    setIsExporting(false)
-    setExportProgress(0)
-    toast.info("Export dibatalkan")
+    cancelRef.current.cancelled = true
   }
 
   useEffect(() => {
@@ -271,7 +272,7 @@ export function HistoryPage() {
 
       {selectedHistory && (
         <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedHistory(null)}>
-          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-0 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e =>
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-0 max-h-[94vh] overflow-y-auto shadow-2xl" onClick={e =>
           e.stopPropagation()}>
             <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 flex justify-between items-start px-6 py-2">
               <h3
@@ -292,92 +293,106 @@ export function HistoryPage() {
             </div>
             <div className="flex flex-col">
               
-                  <div className="relative flex items-center justify-center overflow-hidden min-h-[400px] border-y border-slate-200 dark:border-slate-700 bg-slate-100">
-                    <div className="w-full aspect-[4/5] flex items-center justify-center">
-                      <SlideRenderer
-                        slide={currentSlide}
-                        theme={theme}
-                        totalSlides={slides.length}
-                        brandIdentity={brandIdentity}
-                        displayWidth={384}
-                      />
-                    </div>
+              <div className="relative flex items-center justify-center overflow-hidden min-h-[400px] border-y border-slate-200 dark:border-slate-700 bg-slate-100">
+                <div className="w-full aspect-[4/5] flex items-center justify-center">
+                  <SlideRenderer
+                    slide={currentSlide}
+                    theme={theme}
+                    totalSlides={slides.length}
+                    brandIdentity={brandIdentity}
+                    displayWidth={384}
+                  />
+                </div>
 
-                    <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 flex justify-between">
-                      <Button variant="ghost" size="icon" onClick={handlePrev} disabled={activeSlideIndex === 0} className="bg-white/50 backdrop-blur-sm hover:bg-white/80">
-                        <ChevronLeft />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={handleNext} disabled={activeSlideIndex === (slides.length - 1)} className="bg-white/50 backdrop-blur-sm hover:bg-white/80">
-                        <ChevronRight />
-                      </Button>
-                    </div>
+                <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 flex justify-between">
+                  <Button variant="ghost" size="icon" onClick={handlePrev} disabled={activeSlideIndex === 0} className="bg-white/50 backdrop-blur-sm hover:bg-white/80">
+                    <ChevronLeft />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={handleNext} disabled={activeSlideIndex === (slides.length - 1)} className="bg-white/50 backdrop-blur-sm hover:bg-white/80">
+                    <ChevronRight />
+                  </Button>
+                </div>
 
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2
-                    px-3 py-1 rounded-full bg-white/40 backdrop-blur-sm border
-                    border-white/10 text-black text-[10px] font-medium tracking-wider
-                    uppercase z-10">
-                      Slide {activeSlideIndex + 1} / {slides.length}
-                    </div>
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2
+                px-3 py-1 rounded-full bg-white/40 backdrop-blur-sm border
+                border-white/10 text-black text-[10px] font-medium tracking-wider
+                uppercase z-10">
+                  Slide {activeSlideIndex + 1} / {slides.length}
+                </div>
 
-                    <div className="absolute top-4 right-4">
+                <div className="absolute top-4 right-4">
+                  <Button
+                    variant="ghost" size="icon"
+                    onClick={() => setShowExportMenu(!showExportMenu)}
+                    className="bg-white/50 backdrop-blur-sm hover:bg-white/80 rounded-full"
+                  >
+                    <MoreVertical size={20} />
+                  </Button>
+
+                  {showExportMenu && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 py-2 animate-in fade-in slide-in-from-top-2">
                       <Button
-                        variant="ghost" size="icon"
-                        onClick={() => setShowExportMenu(!showExportMenu)}
-                        className="bg-white/50 backdrop-blur-sm hover:bg-white/80 rounded-full"
+                        variant="ghost" className="w-full justify-start gap-2 px-4 py-2 text-sm"
+                        onClick={() => handleExport('png')}
                       >
-                        <MoreVertical size={20} />
+                        <FileImage size={16} /> PNG
                       </Button>
-
-                      {showExportMenu && (
-                        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 py-2 animate-in fade-in slide-in-from-top-2">
-                          <Button
-                            variant="ghost" className="w-full justify-start gap-2 px-4 py-2 text-sm"
-                            onClick={() => handleExport('png')}
-                          >
-                            <FileImage size={16} /> PNG
-                          </Button>
-                          <Button
-                            variant="ghost" className="w-full justify-start gap-2 px-4 py-2 text-sm"
-                            onClick={() => handleExport('pdf')}
-                          >
-                            <FileText size={16} /> PDF
-                          </Button>
-                        </div>
-                      )}
+                      <Button
+                        variant="ghost" className="w-full justify-start gap-2 px-4 py-2 text-sm"
+                        onClick={() => handleExport('pdf')}
+                      >
+                        <FileText size={16} /> PDF
+                      </Button>
                     </div>
-                  </div>
+                  )}
+                </div>
+              </div>
                 
             </div>
           </div>
         </div>
       )}
     
-                {isExporting && (
-                  <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pointer-events-auto">
-                    <div className="flex flex-col items-center gap-4 max-w-xs w-full text-center">
-                      <div className="space-y-2">
-                        <h3 className="text-lg font-bold">Exporting...</h3>
-                        <p className="text-sm text-slate-500">Mohon tunggu, sedang memproses file Anda.</p>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                        <div
-                          className="bg-indigo-500 h-full transition-[width] duration-300 ease-out"
-                          style={{ width: `${exportProgress || 0}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-mono font-medium text-slate-400">
-                        {exportProgress || 0}% Selesai
-                      </span>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      className="w-full max-w-3xs rounded-full py-6 text-lg border-2 border-red-500 shadow-xl"
-                      onClick={handleCancelExport}
-                    >
-                      <span className="text-white font-medium">Batal</span>
-                    </Button>
-                  </div>
-                )}
+      {isExporting && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pointer-events-auto">
+          <div className="flex flex-col items-center gap-4 max-w-xs w-full text-center">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 justify-center">
+              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <h3 className="text-lg font-bold">Exporting...</h3>
+            </div>
+              <p className="text-sm text-slate-500">Mohon tunggu, sedang memproses file Anda.</p>
+            </div>
+            <div className="w-full bg-slate-200 dark:bg-slate-700 h-4 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-[width] duration-300 ease-out relative overflow-hidden"
+                style={{
+                  width: `${exportProgress || 0}%`,
+                  background: "linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7)",
+                }}
+              >
+                <div
+                  className="absolute top-0 bottom-0 w-1/3 rounded-full"
+                  style={{
+                    background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent)",
+                    animation: "pulse-sweep 1.5s ease-in-out infinite",
+                  }}
+                />
+              </div>
+            </div>
+            <span className="text-xs font-mono font-medium text-slate-400">
+              {exportProgress || 0}% Selesai
+            </span>
+          </div>
+          <Button
+            variant="destructive"
+            className="w-full max-w-3xs rounded-full py-6 text-lg border-2 border-red-500 shadow-xl"
+            onClick={handleCancelExport}
+          >
+            <span className="text-white font-medium">Batal</span>
+          </Button>
+        </div>
+      )}
 </div>
   )
 }

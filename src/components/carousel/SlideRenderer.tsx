@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, forwardRef, useState } from "react"
+import { useRef, useEffect, useState } from "react"
 import { Stage, Layer, Rect, Text, Group, Line, Transformer } from "react-konva"
 import type Konva from "konva"
 import type { Theme } from "@/lib/themes"
@@ -50,7 +50,6 @@ const CONTENT_W = CANVAS_W - PAD * 2
 const FONT = "Plus Jakarta Sans"
 const WATERMARK = "Made with Glito"
 const DEFAULT_THEME = PRESET_THEMES[0]
-const SNAP_THRESHOLD = 8
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function resolveTheme(t: any): Theme {
@@ -140,7 +139,6 @@ function SlideLayer({
   const comp       = resolveComposition(slide.composition)
   const { alignment } = comp
   const isCardStyle = comp.style === "card-grid" || comp.style === "card-flow"
-  const isEven      = slide.slide % 2 === 0
   const accentBg    = theme.accent
   const accentTxt   = contrastColor(accentBg)
   const textAlign   = alignment === "center" ? "center" : alignment === "left" ? "left" : "right"
@@ -171,8 +169,6 @@ function SlideLayer({
     title: titleRef, content: contentRef, geser: geserRef, brand: brandRef,
   }
 
-  // Snap lines state
-  const stageRef = useRef<Konva.Stage>(null)
   // Garis magnet
   // TAMBAH
   const [guides, setGuides] = useState<any[]>([])

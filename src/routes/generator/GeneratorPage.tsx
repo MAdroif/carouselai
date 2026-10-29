@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useLayoutEffect } from "react"
+import React, { useState, useEffect, useRef, useLayoutEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { saveCarousel, getBrandSettings, getCurrentUserEmail } from "@/lib/db"
+import { saveCarousel, updateCarousel, getBrandSettings, upsertBrandSettings, getCurrentUserEmail } from "@/lib/db"
 import { deriveDefaultHandle } from "@/lib/brandDefaults"
 import { trackEvent } from "@/lib/trackerEvent"
 import { toast } from "sonner"
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { SlideRenderer, type Slide, type BrandIdentity, type ElementLayout } from "@/components/carousel/SlideRenderer"
 import { GenerationControls } from "@/components/carousel/GenerationControls"
 import { PRESET_THEMES, type Theme } from "@/lib/themes"
-import { exportPNG, exportPDF } from "@/lib/export"
+import Konva from "konva"
+import { exportPNGFromRefs, exportPDFFromRefs } from "@/lib/export"
 import { ImageIcon, FileText, ChevronLeft, ChevronRight, Plus, Minus, Maximize2 } from "lucide-react"
 import { parseError, loadJSON, saveJSON } from "@/lib/utils"
 
@@ -156,12 +157,12 @@ function CanvasWorkspace({ first, all, children }: {
       </div>
 
       <div
-        className="fixed bottom-6 left-6 z-50 flex items-center gap-1 rounded-xl bg-white p-1 shadow-lg"
+        className="fixed bottom-6 left-15 z-50 flex items-center gap-1 rounded-xl bg-white p-1 shadow-lg"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <Button variant="ghost" size="icon" onClick={() => zoomCenter(0.8)}><Minus className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" onClick={() => zoomCenter(0.9)}><Minus className="h-4 w-4" /></Button>
         <button className="px-2 text-xs tabular-nums" onClick={() => fitTo(first)}>{Math.round(view.zoom * 100)}%</button>
-        <Button variant="ghost" size="icon" onClick={() => zoomCenter(1.25)}><Plus className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" onClick={() => zoomCenter(1.1)}><Plus className="h-4 w-4" /></Button>
         <Button variant="ghost" size="icon" onClick={() => fitTo(all)}><Maximize2 className="h-4 w-4" /></Button>
       </div>
     </div>
@@ -170,15 +171,15 @@ function CanvasWorkspace({ first, all, children }: {
 
 // ==================####==================
 
-function SlideCard({ slide, slideIndex, theme, totalSlides, brandIdentity, selectedId, onSelect, onLayoutChange }: {
+function SlideCard({ slide, theme, totalSlides, brandIdentity, selectedId, onSelect, onLayoutChange, stageRef }: {
   slide: Slide
-  slideIndex: number
   theme: Theme
   totalSlides: number
   brandIdentity?: BrandIdentity
   selectedId?: string | null
   onSelect?: (id: string | null) => void
   onLayoutChange?: (elementId: string, layout: ElementLayout) => void
+  stageRef?: React.RefObject<Konva.Stage>
 }) {
   const [containerWidth, setContainerWidth] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
@@ -195,7 +196,7 @@ function SlideCard({ slide, slideIndex, theme, totalSlides, brandIdentity, selec
   return (
     <div ref={ref} className="relative overflow-hidden bg-white rounded-2xl shadow-md w-full" style={{ aspectRatio: "4/5" }}>
       <SlideRenderer
-        slide={slide} theme={theme} totalSlides={totalSlides} brandIdentity={brandIdentity} displayWidth={containerWidth} editable={true} selectedId={selectedId} onSelect={onSelect} onLayoutChange={onLayoutChange} />
+        slide={slide} theme={theme} totalSlides={totalSlides} brandIdentity={brandIdentity} displayWidth={containerWidth} editable={true} selectedId={selectedId} onSelect={onSelect} onLayoutChange={onLayoutChange} stageRef={stageRef} />
     </div>
   )
 }
@@ -213,6 +214,9 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
   const [topic, setTopic] = useState(() => localStorage.getItem("gen_topic") || "")
   const [slideCount, setSlideCount] = useState<number>(5)
   const [slides, setSlides] = useState<Slide[]>(() => loadJSON("gen_slides", []))
+  const [currentCarouselId, setCurrentCarouselId] = useState<string | null>(() => loadJSON("gen_carousel_id", null))
+  // SESUDAH useState slides
+  const stageRefs = useRef<React.RefObject<Konva.Stage>[]>([])
   const [selection, setSelection] = useState<{ slideIndex: number; elementId: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedTheme, setSelectedTheme] = useState<Theme>(() => loadJSON("gen_theme", PRESET_THEMES[0]))
@@ -227,15 +231,21 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
   const [inputMode, setInputMode] = useState<"topic" | "script">("topic")
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const resolvedHandle = brandSettings?.display_handle || (userEmail ? deriveDefaultHandle(userEmail) : "")
-  const [brandIdentity, setBrandIdentity] = useState<BrandIdentity>({
+  const [brandIdentity, setBrandIdentity] = useState<BrandIdentity>(() => loadJSON("gen_brand", {
     show: true,
     handle: "Data Frame",
     website: "https://glito.vercel.app",
-  })
-  
+  }))
+
+  useEffect(() => saveJSON("gen_brand", brandIdentity), [brandIdentity])
+                                                                    
   useEffect(() => {
     if (resolvedHandle) {
-      setBrandIdentity(prev => (prev.handle === "Data Frame" ? { ...prev, handle: resolvedHandle } : prev))
+      setBrandIdentity(prev => ({
+        ...prev,
+        handle: brandSettings?.display_handle || resolvedHandle,
+        website: brandSettings?.website_url || prev.website,
+      }))
     }
   }, [resolvedHandle])
 
@@ -248,10 +258,57 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     getCurrentUserEmail().then(setUserEmail)
   }, [])
 
+  // TAMBAH
+  const brandSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!brandIdentity.handle && !brandIdentity.website) return
+    if (brandSaveTimer.current) clearTimeout(brandSaveTimer.current)
+    brandSaveTimer.current = setTimeout(async () => {
+      try {
+        await upsertBrandSettings(brandIdentity.handle, brandIdentity.website)
+        toast.success("Brand saved") //DEBUG sementara
+      } catch (e: any) {
+        toast.error("Brand error: " + e.message)
+        // silent fail
+      }
+    }, 2000)
+    return () => {
+      if (brandSaveTimer.current) clearTimeout(brandSaveTimer.current)
+    }
+  }, [brandIdentity.handle, brandIdentity.website])
+
+  // TAMBAH setelah useEffect saveJSON
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  
+  useEffect(() => {
+    if (!currentCarouselId || slides.length === 0) return
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(async () => {
+      try {
+        const hasLayout = slides.some(s => s.layout && Object.keys(s.layout).length > 0)
+        await updateCarousel(currentCarouselId, { slides, theme: selectedTheme })
+        //DEBUG sementara
+        toast.success(hasLayout ? "Auto-saved dengan layout" : "Auto-saved TANPA layout")
+      } catch (e) {
+        console.error("Auto-save gagal:", e)
+      }
+    }, 2000)
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    }
+  }, [slides, selectedTheme, currentCarouselId])
+
+  // Tambah disini:
+  useLayoutEffect(() => {
+    stageRefs.current = slides.map((_, i) => stageRefs.current[i] ?? React.createRef<Konva.Stage>())
+  }, [slides])
+
   async function handleGenerate(theme?: string) {
     if (!topic.trim()) return
     setLoading(true)
     setSlides([])
+    setCurrentCarouselId(null)
+    saveJSON("gen_carousel_id", null)
     trackEvent("carousel_generation_started", { mode: inputMode, slide_count: inputMode === "topic" ? slideCount : undefined })
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -276,7 +333,15 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
       }
       setSlides(data.slides)
       setSelectedTheme(data.theme)
-      await saveCarousel(topic, data)
+      const saved = await saveCarousel(topic, data)
+      if (saved?.[0]?.id) {
+        setCurrentCarouselId(saved[0].id)
+        saveJSON("gen_carousel_id", saved[0].id)
+        //DEBUG sementara
+        toast.success(`ID: ${saved[0].id.slice(0, 8)}...`)
+      } else {
+        toast.error("ID tidak dapat, auto-save tidak aktif")
+      }
       onTokensChange()
       trackEvent("carousel_generation_completed", {
         mode: inputMode,
@@ -296,10 +361,13 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     cancelRefPNG.current = false
     setExportingPNGProgress(0)
     try {
-      await exportPNG(slides, selectedTheme, brandIdentity, (progress) => {
-        setExportingPNGProgress(progress)
-        if (cancelRefPNG.current) throw new Error("Export dibatalkan")
-      })
+      await Promise.all([
+        exportPNGFromRefs(stageRefs.current, (progress) => {
+          setExportingPNGProgress(progress)
+          if (cancelRefPNG.current) throw new Error("Export dibatalkan")
+        }),
+        new Promise(r => setTimeout(r, 1000))
+      ])
       if (!cancelRefPNG.current) {
         toast.success("Berhasil export PNG")
         trackEvent("carousel_downloaded", { format: "png", slide_count: slides.length })
@@ -319,6 +387,8 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     setSlides(prev => prev.map((s, i) =>
       i !== slideIndex ? s : { ...s, layout: { ...s.layout, [elementId]: layout } }
     ))
+    //DEBUG sementara
+    toast.info(`Layout update: slide ${slideIndex}, ${elementId}`)
   }
 
   function handleCancelExportPNG() { cancelRefPNG.current = true }
@@ -328,10 +398,13 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     cancelRefPDF.current = false
     setExportingPDFProgress(0)
     try {
-      await exportPDF(slides, selectedTheme, brandIdentity, (progress) => {
-        setExportingPDFProgress(progress)
-        if (cancelRefPDF.current) throw new Error("Export dibatalkan")
-      })
+      await Promise.all([
+        exportPDFFromRefs(stageRefs.current, (progress) => {
+          setExportingPDFProgress(progress)
+          if (cancelRefPDF.current) throw new Error("Export dibatalkan")
+        }),
+        new Promise(r => setTimeout(r, 1000))
+      ])
       if (!cancelRefPDF.current) {
         toast.success("Berhasil export PDF")
         trackEvent("carousel_downloaded", { format: "pdf", slide_count: slides.length })
@@ -364,13 +437,14 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                 {slides.map((s, i) => (
                   <div key={i} style={{ width: CARD_W }}>
                     <SlideCard
-                      slide={s} slideIndex={i}
+                      slide={s}
                       theme={selectedTheme}
                       totalSlides={slides.length}
                       brandIdentity={brandIdentity}
                       selectedId={selection?.slideIndex === i ? selection.elementId : null}
                       onSelect={(id) => setSelection(id ? { slideIndex: i, elementId: id } : null)}
                       onLayoutChange={(elementId, layout) => handleLayoutChange(i, elementId, layout)}
+                      stageRef={stageRefs.current[i]}
                     />
                   </div>
                 ))}
@@ -394,8 +468,8 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
             />
           </div>
         ) : (
-          <header className={`fixed top-0 left-16 z-40 h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 shadow-sm pointer-events-auto transition-all duration-300 ${sidebarOpen ? "right-72" : "right-0"}`}>
-            <h2 className="text-lg font-bold text-gray-900 truncate shrink-0 mr-8">
+          <header className="fixed top-0 left-16 right-0 w-auto z-30 h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 shadow-sm pointer-events-auto">
+            <h2 className="text-lg font-bold text-gray-900 mr-8">
               {slides[0]?.title || topic || "Carousel"}
             </h2>
             <div className="flex-1 flex justify-end items-center gap-1">
@@ -501,7 +575,9 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                       onChange={(e) => {
                         // const fontSize = Number(e.target.value)
                         // const cur = slides[selection.slideIndex]?.layout?.[selection.elementId] ?? { x: 0, y: 0 }
+                        const cur = slides[selection.slideIndex]?.layout?.[selection.elementId] ?? { x: 0, y: 0}
                         handleLayoutChange(selection.slideIndex, selection.elementId, {
+                          ...cur,
                           fontSize: Number(e.target.value),
                         })
                       }}
@@ -559,29 +635,53 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
 
         {slides.length > 0 && (
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-white/40 backdrop-blur-md shadow-xl rounded-2xl px-4 py-3 pointer-events-auto">
-            {exportingPNG ? (
-              <>
-                <span className="text-sm">Export PNG {exportingPNGProgress}%</span>
-                <Button size="sm" className="bg-red-600 hover:bg-red-800 text-white" onClick={handleCancelExportPNG}>Batal</Button>
-              </>
-            ) : exportingPDF ? (
-              <>
-                <span className="text-sm">Export PDF {exportingPDFProgress}%</span>
-                <Button size="sm" className="bg-red-600 hover:bg-red-800 text-white" onClick={handleCancelExportPDF}>Batal</Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" className="bg-gray-200 text-black hover:bg-gray-400" onClick={handleExportPNG}>
-                  <ImageIcon className="h-4 w-4" />PNG
-                </Button>
-                <Button variant="outline" className="bg-gray-200 text-black hover:bg-gray-400" onClick={handleExportPDF}>
-                  <FileText className="h-4 w-4" />PDF
-                </Button>
-              </>
-            )}
+
+            <>
+              <Button variant="outline" className="bg-gray-200 text-black hover:bg-gray-400" onClick={handleExportPNG}>
+                <ImageIcon className="h-4 w-4" />PNG
+              </Button>
+              <Button variant="outline" className="bg-gray-200 text-black hover:bg-gray-400" onClick={handleExportPDF}>
+                <FileText className="h-4 w-4" />PDF
+              </Button>
+            </>
           </div>
         )}
       </div>
+
+      {exportingPNG && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pointer-events-auto">
+          <div className="flex flex-col items-center gap-4 max-w-xs w-full text-center">
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold">Exporting PNG...</h3>
+              <p className="text-sm text-slate-500">Mohon tunggu, sedang memproses file Anda.</p>
+            </div>
+            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+              <div className="bg-purple-500 h-full transition-[width] duration-300 ease-out" style={{ width: `${exportingPNGProgress}%` }} />
+            </div>
+            <span className="text-xs font-mono font-medium text-slate-400">{exportingPNGProgress}% Selesai</span>
+          </div>
+          <Button variant="destructive" className="w-full max-w-xs rounded-full py-6 text-lg border-2 border-red-500 shadow-xl" onClick={handleCancelExportPNG}>
+            <span className="text-white font-medium">Batal</span>
+          </Button>
+        </div>
+      )}
+      {exportingPDF && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pointer-events-auto">
+          <div className="flex flex-col items-center gap-4 max-w-xs w-full text-center">
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold">Exporting PDF...</h3>
+              <p className="text-sm text-slate-500">Mohon tunggu, sedang memproses file Anda.</p>
+            </div>
+            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+              <div className="bg-purple-500 h-full transition-[width] duration-300 ease-out" style={{ width: `${exportingPDFProgress}%` }} />
+            </div>
+            <span className="text-xs font-mono font-medium text-slate-400">{exportingPDFProgress}% Selesai</span>
+          </div>
+          <Button variant="destructive" className="w-full max-w-xs rounded-full py-6 text-lg border-2 border-red-500 shadow-xl" onClick={handleCancelExportPDF}>
+            <span className="text-white font-medium">Batal</span>
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

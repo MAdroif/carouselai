@@ -14,9 +14,24 @@ export async function saveCarousel(topic: string, content: any) {
         content
       }
     ])
+    .select()
 
   if (error) throw error
   return data
+}
+
+export async function updateCarousel(id: string, content: any) {
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw authError
+  if (!authData?.user) throw new Error("User tidak ditemukan")
+
+  const { error } = await supabase
+    .from('history_carousels')
+    .update({ content })
+    .eq('id', id)
+    .eq('user_id', authData.user.id)
+
+  if (error) throw error
 }
 
 export async function getHistory() {
@@ -83,7 +98,7 @@ export async function upsertBrandSettings(displayHandle: string, websiteUrl: str
       display_handle: displayHandle,
       website_url: websiteUrl,
       updated_at: new Date().toISOString(),
-    })
+    }, { onConflict: 'user_id' })
 
   if (error) throw error
 }
