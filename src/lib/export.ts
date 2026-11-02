@@ -67,12 +67,26 @@ export async function exportPDFFromRefs(
 }
 
 // ─── Export offscreen (HistoryPage, slide tidak semua di layar) ──────────────
+
+// ▼▼▼ FITUR-GAMBAR: MULAI (muat gambar dulu sebelum render offscreen) ▼▼▼
+function preloadImage(url: string): Promise<void> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    img.onload = () => resolve()
+    img.onerror = () => resolve()
+    img.src = url
+  })
+}
+// ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲
+
 async function renderSlideToDataURL(
   slide: Slide,
   theme: Theme,
   totalSlides: number,
   brandIdentity?: BrandIdentity,
 ): Promise<string> {
+  if (slide.image_url) await preloadImage(slide.image_url) // FITUR-GAMBAR
   const host = document.createElement("div")
   Object.assign(host.style, {
     position: "fixed", left: "-99999px", top: "0",
@@ -133,7 +147,7 @@ async function renderSlideToDataURL(
       })
     }
 
-    setTimeout(tryCapture, 50)
+    setTimeout(tryCapture, slide.image_url ? 300 : 50) // FITUR-GAMBAR: beri waktu gambar tampil
   })
 }
 

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, Minus, Plus, Repeat, Minimize2, Maximize2 } from "lucide-react"
+import { Loader2, Minus, Plus, Repeat, Minimize2, Maximize2, ImageIcon } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 
@@ -14,11 +14,13 @@ interface GenerationControlsProps {
   userTokens: number
   inputMode: 'topic' | 'script'
   setInputMode: (val: 'topic' | 'script') => void
+  autoImage: boolean // FITUR-GAMBAR
+  setAutoImage: (val: boolean) => void // FITUR-GAMBAR
 }
 
 export function GenerationControls({ 
   topic, setTopic, slideCount, setSlideCount, loading, onGenerate, userTokens,
-  inputMode, setInputMode
+  inputMode, setInputMode, autoImage, setAutoImage
 }: GenerationControlsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<string>("Edukasi & Psikologi")
@@ -85,7 +87,7 @@ export function GenerationControls({
         )}
 
         <div className="flex items-center justify-between mt-2">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
              <Button
                variant="ghost"
                size="sm"
@@ -107,6 +109,21 @@ export function GenerationControls({
                  <SelectItem value="Viral & Promosi">Viral & Promosi</SelectItem>
                </SelectContent>
              </Select>
+
+            {/* ▼▼▼ FITUR-GAMBAR: MULAI (tombol foto otomatis) ▼▼▼ */}
+             <Button
+               variant="ghost"
+               size="sm"
+               onClick={() => setAutoImage(!autoImage)}
+               className={`rounded-xl h-9 px-3 text-xs gap-2 border dark:border-[#2e2e2e] ${
+                 autoImage
+                   ? "bg-blue text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300"
+                   : "dark:text-[#f0f0f0]"
+               }`}
+              >
+               <ImageIcon size={14} /> Foto {autoImage ? "Aktif" : "Mati"}
+             </Button>
+            {/* ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲ */}
              
              {inputMode === 'topic' && (
                <div className="flex items-center gap-2 border dark:border-[#2e2e2e] rounded-xl px-3">

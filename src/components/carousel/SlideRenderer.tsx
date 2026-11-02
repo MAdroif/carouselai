@@ -1,8 +1,9 @@
 import { useRef, useEffect, useState } from "react"
-import { Stage, Layer, Rect, Text, Group, Line, Transformer } from "react-konva"
+import { Stage, Layer, Rect, Text, Group, Line, Transformer, Image as KonvaImage } from "react-konva"
 import type Konva from "konva"
 import type { Theme } from "@/lib/themes"
 import { PRESET_THEMES } from "@/lib/themes"
+import useImage from "use-image" // FITUR-GAMBAR
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type Composition = {
@@ -28,6 +29,8 @@ export interface ElementLayout {
   width?: number
   fontSize?: number
   align?: "left" | "center" | "right"
+  height?: number // FITUR-GAMBAR
+  opacity?: number // FITUR-GAMBAR
 }
 export interface Slide {
   slide: number
@@ -35,6 +38,9 @@ export interface Slide {
   title: string
   body_text: string
   image_keyword: string
+  // FITUR GAMBAR: URL gambar slide dari Supabase Storage
+  image_url?: string
+  image_credit?: { name: string; url: string } // FITUR-GAMBAR: kredit fotografer Pexels
   svg_code?: string
   highlights?: string[]
   theme?: Theme
@@ -118,14 +124,35 @@ function calcDefaultLayout(
   y += bodyH
   const geserLayout: ElementLayout = { x: xFor(200), y: y + 20, width: 200 }
   const brandLayout: ElementLayout = { x: slide.slide % 2 === 0 ? PAD : CANVAS_W - PAD - 400, y: 100, width: 400 }
+  const imageLayout: ElementLayout = { x: 0, y: 0, width: CANVAS_W, height: CANVAS_H, opacity: 0.4 }
 
-  return { title: titleLayout, content: contentLayout, geser: geserLayout, brand: brandLayout }
+  return { title: titleLayout, content: contentLayout, geser: geserLayout, brand: brandLayout, image: imageLayout }
 }
+
+// ▼▼▼ FITUR-GAMBAR: MULAI (gambar sebagai elemen) ▼▼▼
+function SlideImage({ url, width, height, opacity }: { url: string; width: number; height: number; opacity: number }) {
+  const [img] = useImage(url, "anonymous") // "anonymous" wajib supaya export tidak blank
+  // Selama gambar belum termuat, tetap beri kotak kosong supaya bingkai pilihan punya ukuran
+  if (!img) return <Rect width={width} height={height} fill="rgba(0,0,0,0)" />
+  // Mode "cover": isi kotak tanpa gepeng, kelebihan dipotong rata tengah
+  const scale = Math.max(width / img.width, height / img.height)
+  const cropW = width / scale
+  const cropH = height / scale
+  return (
+    <KonvaImage
+      image={img} width={width} height={height} opacity={opacity}
+      cropX={(img.width - cropW) / 2} cropY={(img.height - cropH) / 2}
+      cropWidth={cropW} cropHeight={cropH}
+    />
+  )
+}
+// ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲
 
 // ─── Inner konva layer: elemen statis dan interaktif ─────────────────────────
 function SlideLayer({
   slide, theme, totalSlides, brandIdentity, editable, selectedId,
   onSelect, onLayoutChange,
+  editingId, onEditStart, onEditEnd, onTextChange, // FITUR-EDIT-TEXT
 }: {
   slide: Slide
   theme: Theme
@@ -135,10 +162,18 @@ function SlideLayer({
   selectedId?: string | null
   onSelect?: (id: string | null) => void
   onLayoutChange?: (elementId: string, layout: ElementLayout) => void
+  editingId?: string | null                           // FITUR-EDIT-TEXT
+  onEditStart?: (id: string) => void                  //FITUR-EDIT-TEXT
+  onEditEnd?: () => void                              //FITUR-EDIT-TEXT
+  onTextChange?: (id: string, text: string) => void   //FITUR-EDIT-TEXT
 }) {
   const comp       = resolveComposition(slide.composition)
   const { alignment } = comp
   const isCardStyle = comp.style === "card-grid" || comp.style === "card-flow"
+  // ▼▼▼ FITUR-GAMBAR: MULAI (teks terang kalau ada gambar) ▼▼
+  const textColor = theme.text
+  const mutedColor = theme.textMuted
+  // ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲
   const accentBg    = theme.accent
   const accentTxt   = contrastColor(accentBg)
   const textAlign   = alignment === "center" ? "center" : alignment === "left" ? "left" : "right"
@@ -163,10 +198,11 @@ function SlideLayer({
   const contentRef = useRef<Konva.Group>(null)
   const geserRef   = useRef<Konva.Group>(null)
   const brandRef   = useRef<Konva.Group>(null)
+  const imageRef   = useRef<Konva.Group>(null) // FITUR-GAMBAR
   const trRef      = useRef<Konva.Transformer>(null)
 
   const refMap: Record<string, React.RefObject<Konva.Group>> = {
-    title: titleRef, content: contentRef, geser: geserRef, brand: brandRef,
+    title: titleRef, content: contentRef, geser: geserRef, brand: brandRef, image: imageRef, // FITUR-GAMBAR
   }
 
   // Garis magnet
@@ -247,8 +283,20 @@ function SlideLayer({
     const node = refMap[id]?.current
     if (!node || !onLayoutChange) return
     const scaleX = node.scaleX()
+    const scaleY = node.scaleY()
     node.scaleX(1)
     node.scaleY(1)
+    // ▼ FITUR-GAMBAR: gambar ubah lebar DAN tinggi
+    if (id === "image") {
+      onLayoutChange(id, {
+        ...pos(id),
+        x: node.x(),
+        y: node.y(),
+        width: Math.max(100, (pos(id).width ?? CANVAS_W) * scaleX),
+        height: Math.max(100, (pos(id).height ?? CANVAS_H) * scaleY),
+      })
+      return
+    }
     onLayoutChange(id, {
       ...pos(id),
       x: node.x(),
@@ -257,6 +305,110 @@ function SlideLayer({
     })
   }
 
+  // ▼▼▼ FITUR-GAMBAR: MULAI (garis magnet saat geser gambar) ▼▼▼
+  function handleSnapDrag(e: Konva.KonvaEventObject<any>) {
+    const stage = e.target.getStage()
+    if (!stage) return
+    const nextGuides = getGuides(getLineGuideStops(stage, e.target), getObjectSnappingEdges(e.target, stage))
+    setGuides(nextGuides)
+    if (nextGuides.length) {
+      const absPos = e.target.absolutePosition()
+      nextGuides.forEach((g) => {
+        if (g.orientation === "V") absPos.x = g.lineGuide + g.offset
+        else absPos.y = g.lineGuide + g.offset
+      })
+      e.target.absolutePosition(absPos)
+    }
+  }
+  // ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲
+
+  // ▼▼▼ FITUR-EDIT-TEKS: MULAI (tap lagi = mengetik, kotak ketik melayang di atas teks) ▼▼▼
+  const selectStamp = useRef(0)
+
+  //Tap pertama = pilih. Tap kedua (elemen sudah terpilih) = mulai mengetik.
+  //Jeda 400ms mencegah satu sentuhan terbaca dua kali (click dan tap)
+  function handleElementTap(id: string, canEdit: boolean) {
+    if (!editable) return
+    if (canEdit && selectedId === id && Date.now() - selectStamp.current > 400) {
+      onEditStart?.(id)
+      return
+    }
+    selectStamp.current = Date.now()
+    onSelect?.(id)
+  }
+
+  useEffect(() => {
+    if (!editable || !editingId) return
+    const group = refMap[editingId]?.current
+    const textNode = group?.findOne<Konva.Text>("Text")
+    const stage = group?.getStage()
+    if (!group || !textNode || !stage) { onEditEnd?.(); return }
+
+    const isTitle = editingId === "title"
+    const original = isTitle ? slide.title : slide.body_text
+    const layout = pos(editingId)
+    const fontSize = isTitle ? (layout.fontSize ?? titleSize) : (layout.fontSize ?? bodySize)
+
+    // Pixel layar per 1 satuan kanvas (sudah termasuk zoom canvas)
+    const rect = stage.container().getBoundingClientRect()
+    const k = rect.width / CANVAS_W
+
+    const ta = document.createElement("textarea")
+    ta.value = original
+    Object.assign(ta.style, {
+      position: "fixed",
+      left: `${rect.left + group.x() * k}px`,
+      top: `${rect.top + group.y() * k}px`,
+      width: `${(layout.width ?? CONTENT_W) * k}px`,
+      fontSize: `${fontSize * k}px`,
+      lineHeight: isTitle ? "1.2" : "1.6",
+      fontFamily: `"${FONT}", sans-serif`,
+      fontWeight: isTitle ? String(theme.fontWeight) : "400",
+      color: textColor,
+      textAlign: layout.align ?? textAlign,
+      background: "transparent",
+      border: "none",
+      outline: "2px dashed #8b5cf6",
+      boxShadow: "none",
+      borderRadius: "0",
+      appearance: "none",
+      margin: "0",
+      padding: "0",
+      resize: "none",
+      overflow: "hidden",
+      whiteSpace: "pre-wrap",
+      zIndex: "100",
+    })
+    const fit = () => { ta.style.height = "auto"; ta.style.height = `${ta.scrollHeight}px` }
+
+    let finished = false
+    // save: simpan hasil ketikan. notify: kabari induk bahwa mode ketik selesai.
+    const finish = (save: boolean, notify: boolean) => {
+      if (finished) return
+      finished = true
+      const value = ta.value
+      ta.remove()
+      textNode.visible(true)
+      group.getLayer()?.batchDraw()
+      if (save && value !== original) onTextChange?.(editingId, value)
+      if (notify) onEditEnd?.()
+    }
+
+    ta.addEventListener("input", fit)
+    ta.addEventListener("blur", () => finish(true, true))
+    ta.addEventListener("keydown", (e) => { if (e.key === "Escape") finish(false, true) })
+  
+    textNode.visible(false)
+    group.getLayer()?.batchDraw()
+    document.body.appendChild(ta)
+    fit()
+    ta.focus()
+    ta.setSelectionRange(ta.value.length, ta.value.length)
+
+    return () => finish(true, false)
+  }, [editingId, editable])
+  // ▲▲▲ FITUR-EDIT-TEKS: SELESAI ▲▲▲
+  
   const showBrand = !!(brandIdentity?.show &&
     (brandIdentity.handle || brandIdentity.website) &&
     (slide.slide === 1 || slide.slide === totalSlides))
@@ -273,10 +425,33 @@ function SlideLayer({
         onTap={() => editable && onSelect?.(null)}
       />
 
+      {/* ▼▼▼ FITUR-GAMBAR: MULAI (gambar sebagai elemen) ▼▼▼ */}
+      {slide.image_url && (
+        <Group
+          ref={imageRef}
+          x={pos("image").x} y={pos("image").y}
+          name="snap-target"
+          draggable={editable && selectedId === "image"}
+          onDragMove={handleSnapDrag}
+          onDragEnd={() => { handleDragEnd("image"); setGuides([]) }}
+          onTransformEnd={() => handleTransformEnd("image")}
+          onClick={() => editable && onSelect?.("image")}
+          onTap={() => editable && onSelect?.("image")}
+        >
+          <SlideImage
+            url={slide.image_url}
+            width={pos("image").width ?? CANVAS_W}
+            height={pos("image").height ?? CANVAS_H}
+            opacity={pos("image").opacity ?? 0.4}
+          />
+        </Group>
+      )}
+      {/* ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲ */}
+
       {/* Counter */}
       {slide.slide > 1 && slide.slide < totalSlides && (
         <Text x={PAD} y={100} text={`${String(slide.slide).padStart(2,"0")} / ${String(totalSlides).padStart(2,"0")}`}
-          fontSize={28} fontFamily="monospace" fill={theme.textMuted} letterSpacing={2} />
+          fontSize={28} fontFamily="monospace" fill={mutedColor} letterSpacing={2} />
       )}
 
       {/* Title */}
@@ -303,15 +478,15 @@ function SlideLayer({
         }}
         onDragEnd={() => { handleDragEnd("title"); setGuides([]) }}
         onTransformEnd={() => handleTransformEnd("title")}
-        onClick={() => editable && onSelect?.("title")}
-        onTap={() => editable && onSelect?.("title")}
+        onClick={() => handleElementTap("title", true)}
+        onTap={() => handleElementTap("title", true)}
         fontSize={pos("title").fontSize ?? titleSize}
       >
         <Text
           width={pos("title").width ?? CONTENT_W}
           text={slide.title}
           fontSize={pos("title").fontSize ?? titleSize} fontFamily={FONT} fontStyle={String(theme.fontWeight)}
-          fill={theme.text} lineHeight={1.2} align={(pos("title") as any).align ?? textAlign} wrap="word"
+          fill={textColor} lineHeight={1.2} align={(pos("title") as any).align ?? textAlign} wrap="word"
         />
       </Group>
 
@@ -348,8 +523,8 @@ function SlideLayer({
         }}
         onDragEnd={() => { handleDragEnd("content"); setGuides([]) }}
         onTransformEnd={() => handleTransformEnd("content")}
-        onClick={() => editable && onSelect?.("content")}
-        onTap={() => editable && onSelect?.("content")}
+        onClick={() => handleElementTap("content", true)}
+        onTap={() => handleElementTap("content", true)}
         fontSize={pos("content").fontSize ?? bodySize}
       >
         {!isCardStyle ? (
@@ -357,7 +532,7 @@ function SlideLayer({
             width={pos("content").width ?? CONTENT_W}
             text={slide.body_text}
             fontSize={pos("content").fontSize ?? bodySize} fontFamily={FONT} fontStyle="400"
-            fill={theme.text} lineHeight={1.6} align={(pos("content") as any).align ?? textAlign} wrap="word"
+            fill={textColor} lineHeight={1.6} align={(pos("content") as any).align ?? textAlign} wrap="word"
           />
         ) : (
           slide.items?.map((item, i) => {
@@ -456,7 +631,7 @@ function SlideLayer({
       {/* Watermark */}
       <Text x={0} y={CANVAS_H - 70} width={CANVAS_W} text={WATERMARK}
         fontSize={18} fontFamily={FONT} fontStyle="500"
-        fill={theme.textMuted} opacity={0.6} align="center" />
+        fill={mutedColor} opacity={0.6} align="center" />
 
       {/* Garis magnet */}
       {guides.map((guide, i) =>
@@ -473,7 +648,10 @@ function SlideLayer({
       {editable && (
         <Transformer
           ref={trRef}
-          enabledAnchors={["middle-left","middle-right"]}
+          visible={!editingId} //FITUR-EDIT-TEXT
+          enabledAnchors={selectedId === "image"
+            ? ["top-left", "top-right", "bottom-left", "bottom-right"] // FITUR-GAMBAR
+            : ["middle-left", "middle-right"]}
           rotateEnabled={false}
           borderStroke="#8b5cf6"
           borderStrokeWidth={2}
@@ -481,11 +659,14 @@ function SlideLayer({
           anchorFill="white"
           anchorSize={12}
           anchorCornerRadius={2}
-          keepRatio={false}
-          boundBoxFunc={(_, newBox) => ({
-            ...newBox,
-            width: Math.max(120, newBox.width),
-          })}
+          keepRatio={selectedId === "image"} // FITUR-GAMBAR: gambar proporsi tetap
+          boundBoxFunc={(oldBox, newBox) => {
+            // ▼ FITUR-GAMBAR: batas ukuran minimal gambar
+            if (selectedId === "image") {
+              return newBox.width < 100 || newBox.height < 100 ? oldBox : newBox
+            }
+            return { ...newBox, width: Math.max(120, newBox.width) }
+          }}
         />
       )}
     </>
@@ -495,7 +676,7 @@ function SlideLayer({
 // ─── Public: SlideRenderer ───────────────────────────────────────────────────
 export function SlideRenderer({
   slide, theme: extTheme, totalSlides, brandIdentity,
-  displayWidth = 400, editable, selectedId, onSelect, onLayoutChange, stageRef,
+  displayWidth = 400, editable, selectedId, onSelect, onLayoutChange, stageRef, editingId, onEditStart, onEditEnd, onTextChange, // FITUR-EDIT-TEKS
 }: {
   slide: Slide
   theme?: Theme
@@ -507,6 +688,10 @@ export function SlideRenderer({
   onSelect?: (id: string | null) => void
   onLayoutChange?: (elementId: string, layout: ElementLayout) => void
   stageRef?: React.RefObject<Konva.Stage>
+  editingId?: string | null                          // FITUR-EDIT-TEKS
+  onEditStart?: (id: string) => void                 // FITUR-EDIT-TEKS
+  onEditEnd?: () => void                             // FITUR-EDIT-TEKS
+  onTextChange?: (id: string, text: string) => void  // FITUR-EDIT-TEKS
 }) {
   const theme  = resolveTheme(extTheme || slide.theme)
   const scale  = displayWidth / CANVAS_W
@@ -518,7 +703,7 @@ export function SlideRenderer({
         <SlideLayer
           slide={slide} theme={theme} totalSlides={totalSlides}
           brandIdentity={brandIdentity} editable={editable}
-          selectedId={selectedId} onSelect={onSelect} onLayoutChange={onLayoutChange}
+          selectedId={selectedId} onSelect={onSelect} onLayoutChange={onLayoutChange} editingId={editingId} onEditStart={onEditStart} onEditEnd={onEditEnd} onTextChange={onTextChange} // FITUR-EDIT-TEKS
         />
       </Layer>
     </Stage>

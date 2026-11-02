@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { saveCarousel, updateCarousel, getBrandSettings, upsertBrandSettings, getCurrentUserEmail } from "@/lib/db"
+import { saveCarousel, updateCarousel, getBrandSettings, upsertBrandSettings, getCurrentUserEmail, uploadSlideImage } from "@/lib/db"
+import { attachStockImages } from "@/lib/stockPhotos" // FITUR-GAMBAR
 import { deriveDefaultHandle } from "@/lib/brandDefaults"
 import { trackEvent } from "@/lib/trackerEvent"
 import { toast } from "sonner"
@@ -18,15 +19,18 @@ const MIN_ZOOM = 0.2
 const MAX_ZOOM = 3
 const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
 
-function CanvasWorkspace({ first, all, children }: {
+function CanvasWorkspace({ first, all, children, onBackgroundTap, isEditing }: {
   first: { w: number; h: number }
   all: { w: number; h: number }
   children: (zoom: number) => React.ReactNode
+  onBackgroundTap?: () => void // FIX-DESELECT
+  isEditing?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 })
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const lastPinch = useRef<{ dist: number; cx: number; cy: number } | null>(null)
+  const tapStart = useRef<{ x: number; y: number } | null>(null) // FIX-DESELECT
 
   function fitTo(target: { w: number; h: number }) {
     const el = ref.current
@@ -58,6 +62,7 @@ function CanvasWorkspace({ first, all, children }: {
     const el = ref.current
     if (!el) return
     function onWheel(e: WheelEvent) {
+      if (isEditing) return //FITUR-EDIT-TEXT
       e.preventDefault()
       const r = el!.getBoundingClientRect()
       if (e.ctrlKey || e.metaKey) {
@@ -83,7 +88,10 @@ function CanvasWorkspace({ first, all, children }: {
     // biarin konva yang handle klik, select, dan drag element
     if (t.closest("canvas")) return
     // baru boleh pan kalo klik di area kosong Workspace
+    if (isEditing) return // FITUR-EDIT-TEKS: blokir pan saat mengetik
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    // FIX-DESELECT
+    tapStart.current = pointers.current.size === 1 ? { x: e.clientX, y: e.clientY } : null
     e.currentTarget.setPointerCapture(e.pointerId)
     if (pointers.current.size === 2) lastPinch.current = measurePinch()
   }
@@ -114,8 +122,18 @@ function CanvasWorkspace({ first, all, children }: {
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    // ▼▼▼ FIX-DESELECT: MULAI ▼▼▼
+    const start = tapStart.current
+    const tracked = pointers.current.has(e.pointerId)
+    const wasSingle = pointers.current.size === 1
+    // ▲▲▲ FIX-DESELECT: SELESAI ▲▲▲
     pointers.current.delete(e.pointerId)
     if (pointers.current.size < 2) lastPinch.current = null
+    // FIX-DESELECT: gerak kurang dari 6px = tap, bukan geser canvas
+    if (tracked && wasSingle && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 6 ) {
+      onBackgroundTap?.()
+    }
+    tapStart.current = null
   }
 
   const level = Math.log2(1 / view.zoom)
@@ -171,7 +189,8 @@ function CanvasWorkspace({ first, all, children }: {
 
 // ==================####==================
 
-function SlideCard({ slide, theme, totalSlides, brandIdentity, selectedId, onSelect, onLayoutChange, stageRef }: {
+function SlideCard({ slide, theme, totalSlides, brandIdentity, selectedId, onSelect, onLayoutChange, stageRef, editingId, onEditStart, onEditEnd, onTextChange, // FITUR-EDIT-TEKS
+}: {
   slide: Slide
   theme: Theme
   totalSlides: number
@@ -180,6 +199,10 @@ function SlideCard({ slide, theme, totalSlides, brandIdentity, selectedId, onSel
   onSelect?: (id: string | null) => void
   onLayoutChange?: (elementId: string, layout: ElementLayout) => void
   stageRef?: React.RefObject<Konva.Stage>
+  editingId?: string | null                          // FITUR-EDIT-TEKS
+  onEditStart?: (id: string) => void                 // FITUR-EDIT-TEKS
+  onEditEnd?: () => void                             // FITUR-EDIT-TEKS
+  onTextChange?: (id: string, text: string) => void  // FITUR-EDIT-TEKS
 }) {
   const [containerWidth, setContainerWidth] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
@@ -196,7 +219,7 @@ function SlideCard({ slide, theme, totalSlides, brandIdentity, selectedId, onSel
   return (
     <div ref={ref} className="relative overflow-hidden bg-white rounded-2xl shadow-md w-full" style={{ aspectRatio: "4/5" }}>
       <SlideRenderer
-        slide={slide} theme={theme} totalSlides={totalSlides} brandIdentity={brandIdentity} displayWidth={containerWidth} editable={true} selectedId={selectedId} onSelect={onSelect} onLayoutChange={onLayoutChange} stageRef={stageRef} />
+        slide={slide} theme={theme} totalSlides={totalSlides} brandIdentity={brandIdentity} displayWidth={containerWidth} editable={true} selectedId={selectedId} onSelect={onSelect} onLayoutChange={onLayoutChange} stageRef={stageRef} editingId={editingId} onEditStart={onEditStart} onEditEnd={onEditEnd} onTextChange={onTextChange} /> {/* FITUR-EDIT-TEKS */}
     </div>
   )
 }
@@ -218,6 +241,11 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
   // SESUDAH useState slides
   const stageRefs = useRef<React.RefObject<Konva.Stage>[]>([])
   const [selection, setSelection] = useState<{ slideIndex: number; elementId: string } | null>(null)
+  const [editing, setEditing] = useState<{ slideIndex: number; elementId: string } | null>(null) //FITUR-EDIT-TEXT
+  // FITUR GAMBAR: MULAI (state upload)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  // FITUR GAMBAR: SELESAI
   const [loading, setLoading] = useState(false)
   const [selectedTheme, setSelectedTheme] = useState<Theme>(() => loadJSON("gen_theme", PRESET_THEMES[0]))
   const [exportingPNG, setExportingPNG] = useState(false)
@@ -229,6 +257,9 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
   const [brandSettings, setBrandSettings] = useState<any | null>(null)
   const [userEmail, setUserEmail] = useState<string>("")
   const [inputMode, setInputMode] = useState<"topic" | "script">("topic")
+  // ▼▼▼ FITUR-GAMBAR: MULAI (foto otomatis, ingat pilihan terakhir) ▼▼▼
+  const [autoImage, setAutoImage] = useState<boolean>(() => loadJSON("gen_auto_image", true))
+  useEffect(() => saveJSON("gen_auto_image", autoImage), [autoImage])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const resolvedHandle = brandSettings?.display_handle || (userEmail ? deriveDefaultHandle(userEmail) : "")
   const [brandIdentity, setBrandIdentity] = useState<BrandIdentity>(() => loadJSON("gen_brand", {
@@ -325,9 +356,22 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
           : error.message ?? "Gagal menghubungi server"
         )
       }
-      setSlides(data.slides)
+      // ▼▼▼ FITUR-GAMBAR: MULAI (foto stock otomatis, batas 10 detik) ▼▼▼
+      let finalSlides = data.slides
+      if (autoImage) { // FITUR-GAMBAR: lewati kalau tombol Foto dimatikan
+        try {
+          finalSlides = await Promise.race([
+            attachStockImages(data.slides),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 10000)),
+          ])
+        } catch {
+          toast.info("Foto otomatis tidak tersedia, slide dibuat tanpa gambar")
+        }
+      }
+      // ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲
+      setSlides(finalSlides)
       setSelectedTheme(data.theme)
-      const saved = await saveCarousel(topic, data)
+      const saved = await saveCarousel(topic, { ...data, slides: finalSlides })
       if (saved?.[0]?.id) {
         setCurrentCarouselId(saved[0].id)
         saveJSON("gen_carousel_id", saved[0].id)
@@ -372,12 +416,48 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     }
   }
 
+  // ▼▼▼ FITUR-EDIT-TEKS: MULAI (simpan hasil ketikan ke slide) ▼▼▼
+  function handleTextChange(slideIndex: number, elementId: string, text: string) {
+    setSlides(prev => prev.map((s, i) => {
+      if (i !== slideIndex) return s
+      return elementId === "title" ? { ...s, title: text } : { ...s, body_text: text }
+    }))
+  }
+  // ▲▲▲ FITUR-EDIT-TEKS: SELESAI ▲▲▲
+  
   // tambahan modifikasi
   function handleLayoutChange(slideIndex: number, elementId: string, layout: ElementLayout) {
     setSlides(prev => prev.map((s, i) =>
       i !== slideIndex ? s : { ...s, layout: { ...s.layout, [elementId]: layout } }
     ))
   }
+
+  // FITUR-GAMBAR: MULAI (upload dan hapus gambar slide)
+  async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = "" // supaya file yang sama bisa dipilih
+    if (!file || !selection) return
+    const slideIndex = selection.slideIndex
+    setUploadingImage(true)
+    try {
+      const url = await uploadSlideImage(file)
+      setSlides(prev => prev.map((s, i) => (i === slideIndex ? { ...s, image_url: url, image_credit: undefined } : s)))
+      setSelection({ slideIndex, elementId: "image" }) // FITUR-GAMBAR
+      toast.success("Gambar ditambahkan")
+    } catch (err: any) {
+      toast.error(err?.message || "Gagal upload gambar")
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  function handleImageRemove() {
+    if (!selection) return
+    const slideIndex = selection.slideIndex
+    setSlides(prev => prev.map((s, i) => (i === slideIndex ? { ...s, image_url: undefined, image_credit: undefined } : s)))
+    setSelection(null) // FITUR-GAMBAR
+  }
+  // FITUR-GAMBAR: SELESAI
 
   function handleCancelExportPNG() { cancelRefPNG.current = true }
 
@@ -419,6 +499,8 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
           <CanvasWorkspace
             first={{ w: CARD_W, h: CARD_H }}
             all={{ w: slides.length * CARD_W + (slides.length - 1) * CARD_GAP, h: CARD_H }}
+            onBackgroundTap={() => { setSelection(null); setEditing(null)}} // FIX-DESELECT
+            isEditing={!!editing} //FITUR-EDIT-TEXT
           >
             {(_zoom) => (
               <div className="flex items-start" style={{ gap: CARD_GAP }}>
@@ -433,6 +515,10 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                       onSelect={(id) => setSelection(id ? { slideIndex: i, elementId: id } : null)}
                       onLayoutChange={(elementId, layout) => handleLayoutChange(i, elementId, layout)}
                       stageRef={stageRefs.current[i]}
+                      editingId={editing?.slideIndex === i ? editing.elementId : null}   // FITUR-EDIT-TEKS
+                      onEditStart={(id) => setEditing({ slideIndex: i, elementId: id })}   // FITUR-EDIT-TEKS
+                      onEditEnd={() => setEditing(null)} // FITUR-EDIT-TEKS
+                      onTextChange={(id, text) => handleTextChange(i, id, text)}   // FITUR-EDIT-TEKS
                     />
                   </div>
                 ))}
@@ -453,6 +539,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
               loading={loading}
               onGenerate={handleGenerate} userTokens={userTokens}
               inputMode={inputMode} setInputMode={setInputMode}
+              autoImage={autoImage} setAutoImage={setAutoImage} // FITUR-GAMBAR
             />
           </div>
         ) : (
@@ -518,6 +605,66 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                   />
                 </div>
 
+                {/* ▼▼▼ FITUR-GAMBAR: MULAI (blok sidebar gambar slide) ▼▼▼ */}
+                <div className="flex flex-col gap-2 pt-4 border-t">
+                  <span className="text-sm font-medium text-gray-700">Gambar Slide</span>
+                  {selection ? (
+                    <>
+                      <span className="text-xs text-gray-500">Slide {selection.slideIndex + 1}</span>
+                      <input
+                        ref={imageInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handleImagePick}
+                      />
+                      <Button variant="outline" disabled={uploadingImage} onClick={() => imageInputRef.current?.click()}>
+                        {uploadingImage ? "Mengunggah..." : slides[selection.slideIndex]?.image_url ? "Ganti Gambar" : "Tambah Gambar"}
+                      </Button>
+                      {slides[selection.slideIndex]?.image_url && (
+                        <Button variant="ghost" className="text-red-600" onClick={handleImageRemove}>Hapus Gambar</Button>
+                      )}
+                      {/* ▼▼▼ FITUR-GAMBAR: MULAI (kredit Pexels) ▼▼▼ */}
+                      {slides[selection.slideIndex]?.image_credit && (
+                        <span className="text-xs text-gray-500">
+                          Foto oleh{" "}
+                          <a href={slides[selection.slideIndex]!.image_credit!.url} target="_blank" rel="noreferrer" className="underline">
+                            {slides[selection.slideIndex]!.image_credit!.name}
+                          </a>{" "}
+                          di{" "}
+                          <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">Pexels</a>
+                        </span>
+                      )}
+                      {/* ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲ */}
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400">Pilih satu elemen di slide dulu (judul, isi, dll), lalu tombol upload muncul di sini.</span>
+                  )}
+                </div>
+                {/* ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲ */}
+
+                {/* ▼▼▼ FITUR-GAMBAR: MULAI (slider opacity gambar) ▼▼▼ */}
+                {selection?.elementId === "image" && (
+                  <div className="flex flex-col gap-2 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Opacity Gambar</span>
+                      <span className="text-xs text-gray-500">
+                        {Math.round((slides[selection.slideIndex]?.layout?.image?.opacity ?? 0.4) * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range" min={5} max={100} step={1}
+                      value={Math.round((slides[selection.slideIndex]?.layout?.image?.opacity ?? 0.4) * 100)}
+                      onChange={(e) => {
+                        const cur = slides[selection.slideIndex]?.layout?.image ?? { x: 0, y: 0 }
+                        handleLayoutChange(selection.slideIndex, "image", { ...cur, opacity: Number(e.target.value) / 100 })
+                      }}
+                      className="w-full accent-purple-600"
+                    />
+                  </div>
+                )}
+                {/* ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲ */}
+                
                 <div className="flex flex-col gap-2 pt-4 border-t">
                   <span className="text-sm font-medium text-gray-700">Warna Tema</span>
                   {Object.entries(

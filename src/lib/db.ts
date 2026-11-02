@@ -107,3 +107,25 @@ export async function getCurrentUserEmail() {
   const { data } = await supabase.auth.getUser()
   return data?.user?.email || ""
 }
+
+// ▼▼▼ FITUR-GAMBAR: MULAI (upload gambar slide ke Supabase Storage) ▼▼▼
+export async function uploadSlideImage(file: File): Promise<string> {
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw authError
+  if (!authData?.user) throw new Error("User tidak ditemukan")
+
+  const allowed = ["image/jpeg", "image/png", "image/webp"]
+  if (!allowed.includes(file.type)) throw new Error("Format harus JPG, PNG, atau WebP")
+  if (file.size > 5 * 1024 * 1024) throw new Error("Ukuran gambar maksimal 5 MB")
+
+  const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg"
+  const path = `${authData.user.id}/${crypto.randomUUID()}.${ext}`
+
+  const { error } = await supabase.storage
+    .from("slide-images")
+    .upload(path, file, { contentType: file.type, upsert: false })
+  if (error) throw error
+
+  const { data } = supabase.storage.from("slide-images").getPublicUrl(path)
+  return data.publicUrl
+}
