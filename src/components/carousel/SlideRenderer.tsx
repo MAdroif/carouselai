@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState } from "react"
-import { Stage, Layer, Rect, Text, Group, Line, Transformer, Image as KonvaImage } from "react-konva"
+import React, { useRef, useEffect, useState } from "react"
+import { Stage, Layer, Rect, Text, Group, Line, Transformer, Image as KonvaImage, Ellipse, RegularPolygon, Star } from "react-konva"
 import type Konva from "konva"
 import type { Theme } from "@/lib/themes"
 import { PRESET_THEMES } from "@/lib/themes"
@@ -46,7 +46,51 @@ export interface Slide {
   theme?: Theme
   items?: CardItem[]
   layout?: Record<string, ElementLayout>
+  shapes?: ShapeItem[] // FITUR-SHAPES
+  texts?: TextItem[] // FITUR-TEKS
 }
+// ▼▼▼ FITUR-SHAPES: MULAI (tipe data shape) ▼▼▼
+export type ShapeType = "rect" | "circle" | "triangle" | "pentagon" | "hexagon" | "star"
+export interface ShapeItem {
+  id: string
+  type: ShapeType
+  x: number
+  y: number
+  width: number
+  height: number
+  fill: string
+  stroke: string
+  strokeWidth: number
+  cornerRadius?: number // hanya untuk rect
+  rotation?: number
+}
+// ▲▲▲ FITUR-SHAPES: SELESAI ▲▲▲
+
+// ▼▼▼ FITUR-TEKS: MULAI (tipe teks bebas) ▼▼▼
+export interface TextItem {
+  id: string
+  text: string
+  x: number
+  y: number
+  width: number
+  fontSize: number
+  fontFamily: string
+  fontStyle: string   // "normal" | "bold" | "italic" | "bold italic"
+  textDecoration: string  // "" | "underline"
+  fill: string
+  align: "left" | "center" | "right"
+  lineHeight: number
+  letterSpacing: number
+}
+// ▲▲▲ FITUR-TEKS: SELESAI ▲▲▲
+
+// ▼▼▼ REFACTOR-ACTIVE: MULAI (tipe state aktif terpusat) SELECTION ▼▼▼
+export type ActiveElement =
+  | { type: "element"; slideIndex: number; elementId: string; editing?: boolean }
+  | { type: "shape";   slideIndex: number; shapeId: string }
+  | { type: "text";    slideIndex: number; textId: string; editing?: boolean }
+  | null
+// ▲▲▲ REFACTOR-ACTIVE: SELESAI ▲▲▲
 
 // ─── Canvas constants ────────────────────────────────────────────────────────
 export const CANVAS_W = 1080
@@ -149,24 +193,181 @@ function SlideImage({ url, width, height, opacity }: { url: string; width: numbe
 // ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲
 
 // ─── Inner konva layer: elemen statis dan interaktif ─────────────────────────
-function SlideLayer({
-  slide, theme, totalSlides, brandIdentity, editable, selectedId,
-  onSelect, onLayoutChange,
-  editingId, onEditStart, onEditEnd, onTextChange, // FITUR-EDIT-TEXT
-}: {
-  slide: Slide
-  theme: Theme
-  totalSlides: number
-  brandIdentity?: BrandIdentity
+// ▼▼▼ FITUR-SHAPES: MULAI (render satu shape) ▼▼▼
+const ShapeKonva = React.forwardRef<Konva.Group, {
+  shape: ShapeItem
   editable?: boolean
-  selectedId?: string | null
-  onSelect?: (id: string | null) => void
-  onLayoutChange?: (elementId: string, layout: ElementLayout) => void
-  editingId?: string | null                           // FITUR-EDIT-TEXT
-  onEditStart?: (id: string) => void                  //FITUR-EDIT-TEXT
-  onEditEnd?: () => void                              //FITUR-EDIT-TEXT
-  onTextChange?: (id: string, text: string) => void   //FITUR-EDIT-TEXT
-}) {
+  isSelected?: boolean
+  onSelect?: () => void
+  onDragEnd?: (x: number, y: number) => void
+  onTransformEnd?: (updates: Partial<ShapeItem>) => void
+}>
+(function ShapeKonva(
+  { shape, editable, isSelected, onSelect, onDragEnd, onTransformEnd }: {
+  shape: ShapeItem
+  editable?: boolean
+  isSelected?: boolean
+  onSelect?: () => void
+  onDragEnd?: (x: number, y: number) => void
+  onTransformEnd?: (updates: Partial<ShapeItem>) => void
+}, ref: React.ForwardedRef<Konva.Group>) {
+  const groupRef = useRef<Konva.Group>(null)
+  const cx = shape.width / 2
+  const cy = shape.height / 2
+  const common = {
+    fill: shape.fill,
+    stroke: shape.stroke,
+    strokeWidth: shape.strokeWidth,
+    listening: !!editable,
+  }
+  return (
+    <Group
+      ref={(node) => {
+        (groupRef as React.MutableRefObject<Konva.Group | null>).current = node
+        if (typeof ref === "function") ref(node)
+        else if (ref && "current" in ref) (ref as React.MutableRefObject<Konva.Group | null>).current = node
+      }}
+      x={shape.x} y={shape.y}
+      draggable={editable && isSelected}
+      onClick={onSelect} onTap={onSelect}
+      onDragEnd={() => {
+        const n = groupRef.current
+        if (!n) return
+        onDragEnd?.(n.x(), n.y())
+      }}
+      onTransformEnd={() => {
+        const n = groupRef.current
+        if (!n) return
+        const scaleX = n.scaleX(), scaleY = n.scaleY()
+        n.scaleX(1); n.scaleY(1)
+        onTransformEnd?. ({
+          x: n.x(), y: n.y(),
+          width: Math.max(20, shape.width * scaleX),
+          height: Math.max(20, shape.height * scaleY),
+          rotation: n.rotation(),
+        })
+      }}
+    >
+      {shape.type === "rect" && (
+        <Rect width={shape.width} height={shape.height} cornerRadius={shape.cornerRadius ?? 0} {...common} />
+      )}
+      {shape.type === "circle" && (
+        <Ellipse radiusX={cx} radiusY={cy} x={cx} y={cy} {...common} />
+      )}
+      {shape.type === "triangle" && (
+        <RegularPolygon sides={3} radius={Math.min(cx, cy)} x={cx} y={cy} {...common} />
+      )}
+      {shape.type === "pentagon" && (
+        <RegularPolygon sides={5} radius={Math.min(cx, cy)} x={cx} y={cy} {...common} />
+      )}
+      {shape.type === "hexagon" && (
+        <RegularPolygon sides={6} radius={Math.min(cx, cy)} x={cx} y={cy} {...common} />
+      )}
+      {shape.type === "star" && (
+        <Star numPoints={5} innerRadius={Math.min(cx,cy)*0.45} outerRadius={Math.min(cx,cy)} x={cx} y={cy} {...common} />
+      )}
+    </Group>
+  )
+})
+// ▲▲▲ FITUR-SHAPES: SELESAI ▲▲▲
+
+// ▼▼▼ FITUR-TEKS: MULAI (teks bebas sebagai elemen) ▼▼▼
+const FreeText = React.forwardRef<Konva.Group, {
+  item: TextItem
+  editable?: boolean
+  isSelected?: boolean
+  onSelect?: () => void
+  onDragEnd?: (x: number, y: number) => void
+  onTransformEnd?: (updates: Partial<TextItem>) => void
+  onDoubleClick?: () => void
+}>(function FreeText({ item, editable, isSelected, onSelect, onDragEnd, onTransformEnd, onDoubleClick }, ref) {
+  const groupRef = useRef<Konva.Group>(null)
+  return (
+    <Group
+      ref={(node) => {
+        (groupRef as React.MutableRefObject<Konva.Group | null>).current = node
+        if (typeof ref === "function") ref(node)
+        else if (ref && "current" in ref) (ref as React.MutableRefObject<Konva.Group | null>).current = node
+      }}
+      x={item.x} y={item.y}
+      draggable={editable && isSelected}
+      onClick={onSelect} onTap={onSelect}
+      onDblClick={onDoubleClick} onDblTap={onDoubleClick}
+      onDragEnd={() => { const n = groupRef.current; if (n) onDragEnd?.(n.x(), n.y()) }}
+      onTransformEnd={() => {
+        const n = groupRef.current
+        if (!n) return
+        const scaleX = n.scaleX()
+        n.scaleX(1); n.scaleY(1)
+        onTransformEnd?.({
+          x: n.x(), y: n.y(),
+          width: Math.max(80, item.width * scaleX),
+        })
+      }}
+    >
+      <Text
+        width={item.width}
+        text={item.text}
+        fontSize={item.fontSize}
+        fontFamily={item.fontFamily}
+        fontStyle={item.fontStyle}
+        textDecoration={item.textDecoration}
+        fill={item.fill}
+        align={item.align}
+        lineHeight={item.lineHeight}
+        letterSpacing={item.letterSpacing}
+        wrap="word"
+      />
+    </Group>
+  )
+})
+// ▲▲▲ FITUR-TEKS: SELESAI ▲▲▲
+
+function SlideLayer(
+  { slide, theme, totalSlides, brandIdentity, editable, active, onActive, onLayoutChange, onTextChange, onShapeChange, onTextItemChange, onTextItemEdit,
+    
+  }: {
+    slide: Slide
+    theme: Theme
+    totalSlides: number
+    brandIdentity?: BrandIdentity
+    editable?: boolean
+    onLayoutChange?: (elementId: string, layout: ElementLayout) => void
+    onTextChange?: (id: string, text: string) => void //FITUR-EDIT-TEXT
+     //FITUR-SHAPES
+    onShapeChange?: (id: string, updates: Partial<ShapeItem>) => void
+    // FITUR-TEKS
+    onTextItemChange?: (id: string, updates: Partial<TextItem>) => void
+    onTextItemEdit?: (id: string, text: string) => void
+    active?: ActiveElement
+    onActive?: (next: ActiveElement) => void
+  }) {
+  // ▼▼▼ REFACTOR-ACTIVE: MULAI (derive dari active) ▼▼▼
+  const selectedId   = active?.type === "element" ? active.elementId   : null
+  const selectedShapeId = active?.type === "shape"   ? active.shapeId  : null
+  const selectedTextId  = active?.type === "text"    ? active.textId   : null
+  const editingId    = active?.type === "element" && active.editing ? active.elementId
+                     : active?.type === "text"    && active.editing ? active.textId
+                     : null
+  
+  function onSelect(id: string | null) {
+    onActive?.(id ? { type: "element", slideIndex: active?.slideIndex ?? 0, elementId: id } : null)
+  }
+  function onSelectShape(id: string | null) {
+    onActive?.(id ? { type: "shape", slideIndex: active?.slideIndex ?? 0, shapeId: id } : null)
+  }
+  function onSelectText(id: string | null) {
+    onActive?.(id ? { type: "text", slideIndex: active?.slideIndex ?? 0, textId: id } : null)
+  }
+  function onEditStart(_id: string) {
+    if (active?.type === "element") onActive?.({ ...active, editing: true })
+    else if (active?.type === "text") onActive?.({ ...active, editing: true })
+  }
+  function onEditEnd() {
+    if (active?.type === "element") onActive?.({ ...active, editing: false })
+    else if (active?.type === "text") onActive?.({ ...active, editing: false })
+  }
+  // ▲▲▲ REFACTOR-ACTIVE: SELESAI ▲▲▲
   const comp       = resolveComposition(slide.composition)
   const { alignment } = comp
   const isCardStyle = comp.style === "card-grid" || comp.style === "card-flow"
@@ -201,14 +402,22 @@ function SlideLayer({
   const imageRef   = useRef<Konva.Group>(null) // FITUR-GAMBAR
   const trRef      = useRef<Konva.Transformer>(null)
 
+  // REF FITUR-SHAPES
+  const shapeTrRef = useRef<Konva.Transformer>(null)
+  const shapeNodeRefs = useRef<Record<string, Konva.Group | null>>({})
+
+  // Ref FITUR-TEKS
+  const textNodeRefs = useRef<Record<string, Konva.Group | null>>({})
+  const textTrRef = useRef<Konva.Transformer>(null)
+
   const refMap: Record<string, React.RefObject<Konva.Group>> = {
     title: titleRef, content: contentRef, geser: geserRef, brand: brandRef, image: imageRef, // FITUR-GAMBAR
   }
 
   // Garis magnet
-  // TAMBAH
   const [guides, setGuides] = useState<any[]>([])
 
+// ─── UseEffect ─────────────────────────────────────────────────────────────────
   // Pasang Transformer ke elemen terpilih
   useEffect(() => {
     if (!trRef.current || !editable) return
@@ -216,6 +425,24 @@ function SlideLayer({
     trRef.current.nodes(node ? [node] : [])
     trRef.current.getLayer()?.batchDraw()
   }, [selectedId, editable])
+
+  // useEffect FITUR-SHAPES
+  useEffect(() => {
+    if (!shapeTrRef.current) return
+    const node = selectedShapeId ? shapeNodeRefs.current[selectedShapeId] : null
+    shapeTrRef.current.nodes(node ? [node] : [])
+    shapeTrRef.current.getLayer()?.batchDraw()
+  }, [selectedShapeId])
+
+  // useEffect FITUR-TEKS
+  // ▼▼▼ FITUR-TEKS: MULAI (Transformer untuk teks bebas) ▼▼▼
+  useEffect(() => {
+    if (!textTrRef.current) return
+    const node = selectedTextId ? textNodeRefs.current[selectedTextId] : null
+    textTrRef.current.nodes(node ? [node] : [])
+    textTrRef.current.getLayer()?.batchDraw()
+  }, [selectedTextId])
+  // ▲▲▲ FITUR-TEKS: SELESAI ▲▲▲
 
   const GUIDELINE_OFFSET = 8
 
@@ -448,6 +675,119 @@ function SlideLayer({
       )}
       {/* ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲ */}
 
+      {/* ▼▼▼ FITUR-SHAPES: MULAI (render shapes di atas gambar, di bawah teks) ▼▼▼ */}
+      {slide.shapes?.slice(0, 5).map((shape) => (
+        <ShapeKonva
+          key={shape.id}
+          ref={(node) => { shapeNodeRefs.current[shape.id] = node }}
+          shape={shape}
+          editable={editable}
+          isSelected={selectedShapeId === shape.id}
+          onSelect={() => onSelectShape?.(shape.id)}
+          onDragEnd={(x, y) => onShapeChange?.(shape.id, { x, y })}
+          onTransformEnd={(updates) => onShapeChange?.(shape.id, updates)}
+        />
+      ))}
+      {/* Transformer untuk shapes */}
+      {editable && (
+        <Transformer
+          ref={shapeTrRef}
+          rotateEnabled={true}
+          keepRatio={false}
+          borderStroke="#f59e0b"
+          borderStrokeWidth={2}
+          anchorStroke="#f59e0b"
+          anchorFill="white"
+          anchorSize={12}
+          anchorCornerRadius={2}
+          boundBoxFunc={(_, newBox) => ({
+            ...newBox,
+            width: Math.max(20, newBox.width),
+            height: Math.max(20, newBox.height),
+          })}
+        />
+      )}
+      {/* ▲▲▲ FITUR-SHAPES: SELESAI ▲▲▲ */}
+
+      {/* ▼▼▼ FITUR-TEKS: MULAI (render teks bebas) ▼▼▼ */}
+      {slide.texts?.map((item) => (
+        <FreeText
+          key={item.id}
+          ref={(node) => { textNodeRefs.current[item.id] = node }}
+          item={item}
+          editable={editable}
+          isSelected={selectedTextId === item.id}
+          onSelect={() => onSelectText?.(item.id)}
+          onDragEnd={(x, y) => onTextItemChange?.(item.id, { x, y })}
+          onTransformEnd={(updates) => onTextItemChange?.(item.id, updates)}
+          onDoubleClick={() => {
+            // Edit teks bebas lewat textarea overlay
+            const group = textNodeRefs.current[item.id]
+            const textNode = group?.findOne<Konva.Text>("Text")
+            const stage = group?.getStage()
+            if (!group || !textNode || !stage) return
+            const rect = stage.container().getBoundingClientRect()
+            const k = rect.width / CANVAS_W
+            const ta = document.createElement("textarea")
+            ta.value = item.text
+            Object.assign(ta.style, {
+              position: "fixed",
+              left: `${rect.left + group.x() * k}px`,
+              top: `${rect.top + group.y() * k}px`,
+              width: `${item.width * k}px`,
+              fontSize: `${item.fontSize * k}px`,
+              lineHeight: String(item.lineHeight),
+              fontFamily: `"${item.fontFamily}", sans-serif`,
+              fontWeight: item.fontStyle.includes("bold") ? "bold" : "normal",
+              fontStyle: item.fontStyle.includes("italic") ? "italic" : "normal",
+              color: item.fill,
+              textAlign: item.align,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              boxShadow: "none",
+              margin: "0", padding: "0",
+              resize: "none", overflow: "hidden",
+              whiteSpace: "pre-wrap", zIndex: "100",
+            })
+            const fit = () => { ta.style.height = "auto"; ta.style.height = `${ta.scrollHeight}px` }
+            let done = false
+            const finish = () => {
+              if (done) return; done = true
+              const val = ta.value
+              ta.remove()
+              textNode.opacity(1)
+              group.getLayer()?.batchDraw()
+              if (val !== item.text) onTextItemEdit?.(item.id, val)
+              onSelectText?.(null)
+            }
+            ta.addEventListener("input", fit)
+            ta.addEventListener("blur", finish)
+            ta.addEventListener("keydown", (e) => { if (e.key === "Escape") finish() })
+            textNode.opacity(0)
+            group.getLayer()?.batchDraw()
+            document.body.appendChild(ta)
+            fit(); ta.focus()
+          }}
+        />
+      ))}
+      {editable && (
+        <Transformer
+          ref={textTrRef}
+          enabledAnchors={["middle-left", "middle-right"]}
+          rotateEnabled={false}
+          borderStroke="#10b981"
+          borderStrokeWidth={2}
+          anchorStroke="#10b981"
+          anchorFill="white"
+          anchorSize={12}
+          anchorCornerRadius={2}
+          keepRatio={false}
+          boundBoxFunc={(_, newBox) => ({ ...newBox, width: Math.max(80, newBox.width) })}
+        />
+      )}
+      {/* ▲▲▲ FITUR-TEKS: SELESAI ▲▲▲ */}
+
       {/* Counter */}
       {slide.slide > 1 && slide.slide < totalSlides && (
         <Text x={PAD} y={100} text={`${String(slide.slide).padStart(2,"0")} / ${String(totalSlides).padStart(2,"0")}`}
@@ -676,7 +1016,7 @@ function SlideLayer({
 // ─── Public: SlideRenderer ───────────────────────────────────────────────────
 export function SlideRenderer({
   slide, theme: extTheme, totalSlides, brandIdentity,
-  displayWidth = 400, editable, selectedId, onSelect, onLayoutChange, stageRef, editingId, onEditStart, onEditEnd, onTextChange, // FITUR-EDIT-TEKS
+  displayWidth = 400, editable, onLayoutChange, stageRef, onTextChange, onShapeChange, onTextItemChange, onTextItemEdit, active, onActive,
 }: {
   slide: Slide
   theme?: Theme
@@ -684,14 +1024,16 @@ export function SlideRenderer({
   brandIdentity?: BrandIdentity
   displayWidth?: number
   editable?: boolean
-  selectedId?: string | null
-  onSelect?: (id: string | null) => void
   onLayoutChange?: (elementId: string, layout: ElementLayout) => void
   stageRef?: React.RefObject<Konva.Stage>
-  editingId?: string | null                          // FITUR-EDIT-TEKS
-  onEditStart?: (id: string) => void                 // FITUR-EDIT-TEKS
-  onEditEnd?: () => void                             // FITUR-EDIT-TEKS
-  onTextChange?: (id: string, text: string) => void  // FITUR-EDIT-TEKS
+  onTextChange?: (id: string, text: string) => void // FITUR-EDIT-TEKS
+  onShapeChange?: (id: string, updates: Partial<ShapeItem>) => void
+  // FITUR-TEKS
+  onTextItemChange?: (id: string, updates: Partial<TextItem>) => void
+  onTextItemEdit?: (id: string, text: string) => void
+  active?: ActiveElement
+  onActive?: (next: ActiveElement) => void
+
 }) {
   const theme  = resolveTheme(extTheme || slide.theme)
   const scale  = displayWidth / CANVAS_W
@@ -703,7 +1045,11 @@ export function SlideRenderer({
         <SlideLayer
           slide={slide} theme={theme} totalSlides={totalSlides}
           brandIdentity={brandIdentity} editable={editable}
-          selectedId={selectedId} onSelect={onSelect} onLayoutChange={onLayoutChange} editingId={editingId} onEditStart={onEditStart} onEditEnd={onEditEnd} onTextChange={onTextChange} // FITUR-EDIT-TEKS
+          onLayoutChange={onLayoutChange}  onTextChange={onTextChange}
+          onShapeChange={onShapeChange}
+          onTextItemChange={onTextItemChange}
+          onTextItemEdit={onTextItemEdit}
+          active={active} onActive={onActive}
         />
       </Layer>
     </Stage>

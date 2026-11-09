@@ -6,12 +6,12 @@ import { deriveDefaultHandle } from "@/lib/brandDefaults"
 import { trackEvent } from "@/lib/trackerEvent"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { SlideRenderer, type Slide, type BrandIdentity, type ElementLayout } from "@/components/carousel/SlideRenderer"
+import { SlideRenderer, type Slide, type BrandIdentity, type ElementLayout, type ShapeItem, type ShapeType, CANVAS_W, CANVAS_H, type TextItem, type ActiveElement } from "@/components/carousel/SlideRenderer"
 import { GenerationControls } from "@/components/carousel/GenerationControls"
 import { PRESET_THEMES, type Theme } from "@/lib/themes"
 import Konva from "konva"
 import { exportPNGFromRefs, exportPDFFromRefs } from "@/lib/export"
-import { ImageIcon, FileText, ChevronLeft, ChevronRight, Plus, Minus, Maximize2 } from "lucide-react"
+import { ImageIcon, FileText, ChevronLeft, ChevronRight, Plus, Minus, Maximize2, Undo2, Redo2 } from "lucide-react"
 import { parseError, loadJSON, saveJSON } from "@/lib/utils"
 
 // Canvas Workspace
@@ -189,20 +189,23 @@ function CanvasWorkspace({ first, all, children, onBackgroundTap, isEditing }: {
 
 // ==================####==================
 
-function SlideCard({ slide, theme, totalSlides, brandIdentity, selectedId, onSelect, onLayoutChange, stageRef, editingId, onEditStart, onEditEnd, onTextChange, // FITUR-EDIT-TEKS
+function SlideCard({ slide, theme, totalSlides, brandIdentity,onLayoutChange, stageRef, onTextChange, onShapeChange, onTextItemChange, onTextItemEdit, active, onActive,
 }: {
   slide: Slide
   theme: Theme
   totalSlides: number
   brandIdentity?: BrandIdentity
-  selectedId?: string | null
-  onSelect?: (id: string | null) => void
   onLayoutChange?: (elementId: string, layout: ElementLayout) => void
   stageRef?: React.RefObject<Konva.Stage>
-  editingId?: string | null                          // FITUR-EDIT-TEKS
-  onEditStart?: (id: string) => void                 // FITUR-EDIT-TEKS
-  onEditEnd?: () => void                             // FITUR-EDIT-TEKS
-  onTextChange?: (id: string, text: string) => void  // FITUR-EDIT-TEKS
+  // FITUR-EDIT-TEKS
+  onTextChange?: (id: string, text: string) => void
+   // FITUR-SHAPES
+  onShapeChange?: (id: string, updates: Partial<ShapeItem>) => void
+  // FITUR-TEKS
+  onTextItemChange?: (id: string, updates: Partial<TextItem>) => void
+  onTextItemEdit?: (id: string, text: string) => void
+  active?: ActiveElement
+  onActive?: (next: ActiveElement) => void
 }) {
   const [containerWidth, setContainerWidth] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
@@ -219,7 +222,8 @@ function SlideCard({ slide, theme, totalSlides, brandIdentity, selectedId, onSel
   return (
     <div ref={ref} className="relative overflow-hidden bg-white rounded-2xl shadow-md w-full" style={{ aspectRatio: "4/5" }}>
       <SlideRenderer
-        slide={slide} theme={theme} totalSlides={totalSlides} brandIdentity={brandIdentity} displayWidth={containerWidth} editable={true} selectedId={selectedId} onSelect={onSelect} onLayoutChange={onLayoutChange} stageRef={stageRef} editingId={editingId} onEditStart={onEditStart} onEditEnd={onEditEnd} onTextChange={onTextChange} /> {/* FITUR-EDIT-TEKS */}
+        slide={slide} theme={theme} totalSlides={totalSlides} brandIdentity={brandIdentity} displayWidth={containerWidth} editable={true} onLayoutChange={onLayoutChange} stageRef={stageRef} onTextChange={onTextChange} onShapeChange={onShapeChange} onTextItemChange={onTextItemChange}
+        onTextItemEdit={onTextItemEdit} active={active} onActive={onActive} /> 
     </div>
   )
 }
@@ -240,8 +244,18 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
   const [currentCarouselId, setCurrentCarouselId] = useState<string | null>(() => loadJSON("gen_carousel_id", null))
   // SESUDAH useState slides
   const stageRefs = useRef<React.RefObject<Konva.Stage>[]>([])
-  const [selection, setSelection] = useState<{ slideIndex: number; elementId: string } | null>(null)
-  const [editing, setEditing] = useState<{ slideIndex: number; elementId: string } | null>(null) //FITUR-EDIT-TEXT
+  const [active, setActive] = useState<ActiveElement>(null) /* active selection */
+  // ▼▼▼ REFACTOR-ACTIVE: MULAI (jembatan baca-saja, semua turunan dari active) ▼▼▼
+  const selection = active?.type === "element" ? active : null
+  const selectedShape = active?.type === "shape" ? active : null
+  const selectedTextItem = active?.type === "text" ? active : null
+  const isEditingNow = (active?.type === "element" || active?.type === "text") ? !!active.editing : false
+  // ▼ REFACTOR-ACTIVE: nama turunan dari active
+  const activeSlideIndex = active?.slideIndex ?? 0
+  const activeElementId = active?.type === "element" ? active.elementId : null
+  const activeTextId = active?.type === "text" ? active.textId : null
+  // ▲▲▲ REFACTOR-ACTIVE: SELESAI ▲▲▲
+  // ▲▲▲ FITUR-SHAPES: SELESAI ▲▲▲
   // FITUR GAMBAR: MULAI (state upload)
   const [uploadingImage, setUploadingImage] = useState(false)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -267,6 +281,38 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     handle: "Data Frame",
     website: "https://glito.vercel.app",
   }))
+  const [colorMode, setColorMode] = useState<"preset" | "custom">("preset")
+
+  // ▼▼▼ UNDO/REDO: MULAI ▼▼▼
+  type Snapshot = { slides: Slide[]; theme: Theme }
+  const [past, setPast] = useState<Snapshot[]>([])
+  const [future, setFuture] = useState<Snapshot[]>([])
+  const slidesRef = useRef(slides)
+  const themeRef = useRef(selectedTheme)
+  slidesRef.current = slides
+  themeRef.current = selectedTheme
+  
+  function pushHistory() {
+    setPast(p => [...p.slice(-49), { slides: slidesRef.current, theme: themeRef.current }])
+    setFuture([])
+  }
+  function handleUndo() {
+    if (past.length === 0) return
+    const prev = past[past.length - 1]
+    setPast(p => p.slice(0, -1))
+    setFuture(f => [{ slides: slidesRef.current, theme: themeRef.current }, ...f])
+    setSlides(prev.slides)
+    setSelectedTheme(prev.theme)
+  }
+  function handleRedo() {
+    if (future.length === 0) return
+    const next = future[0]
+    setFuture(f => f.slice(1))
+    setPast(p => [...p, { slides: slidesRef.current, theme: themeRef.current }])
+    setSlides(next.slides)
+    setSelectedTheme(next.theme)
+  }
+  // ▲▲▲ UNDO/REDO: SELESAI ▲▲▲
 
   useEffect(() => saveJSON("gen_brand", brandIdentity), [brandIdentity])
                                                                     
@@ -418,15 +464,108 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
 
   // ▼▼▼ FITUR-EDIT-TEKS: MULAI (simpan hasil ketikan ke slide) ▼▼▼
   function handleTextChange(slideIndex: number, elementId: string, text: string) {
+    pushHistory()
     setSlides(prev => prev.map((s, i) => {
       if (i !== slideIndex) return s
       return elementId === "title" ? { ...s, title: text } : { ...s, body_text: text }
     }))
   }
   // ▲▲▲ FITUR-EDIT-TEKS: SELESAI ▲▲▲
+
+  // ▼▼▼ FITUR-SHAPES: MULAI (tambah, ubah, dan hapus shape) ▼▼▼
+  function handleAddShape(slideIndex: number, type: ShapeType) {
+    pushHistory()
+    const newShape: ShapeItem = {
+      id: crypto.randomUUID(),
+      type,
+      x: CANVAS_W / 2 - 100,
+      y: CANVAS_H / 2 - 100,
+      width: 200,
+      height: 200,
+      fill: selectedTheme.accent,
+      stroke: "transparent",
+      strokeWidth: 0,
+      cornerRadius: 0,
+    }
+    setSlides(prev => prev.map((s, i) =>
+      i !== slideIndex ? s : { ...s, shapes: [...(s.shapes ?? []), newShape].slice(0, 5) }
+    ))
+    setActive({ type: "shape", slideIndex, shapeId: newShape.id })
+  }
+
+  function handleShapeChange(slideIndex: number, shapeId: string, updates: Partial<ShapeItem>) {
+    pushHistory()
+    setSlides(prev => prev.map((s, i) =>
+      i !== slideIndex ? s : {
+        ...s,
+        shapes: s.shapes?.map(sh => sh.id === shapeId ? { ...sh, ...updates } : sh)
+      }
+    ))
+  }
+
+  // ▲▲▲ FITUR-SHAPES: SELESAI ▲▲▲
+
+  // ▼▼▼ FITUR-TEKS: MULAI (tambah, ubah, hapus teks bebas + hapus elemen apapun) ▼▼▼
+  function handleAddText(slideIndex: number) {
+    pushHistory()
+    const newText: TextItem = {
+      id: crypto.randomUUID(),
+      text: "Teks baru",
+      x: CANVAS_W / 2 - 150,
+      y: CANVAS_H / 2 - 30,
+      width: 300,
+      fontSize: 48,
+      fontFamily: "Plus Jakarta Sans",
+      fontStyle: "normal",
+      textDecoration: "",
+      fill: selectedTheme.text,
+      align: "center",
+      lineHeight: 1.4,
+      letterSpacing: 0,
+    }
+    setSlides(prev => prev.map((s, i) =>
+      i !== slideIndex ? s : { ...s, texts: [...(s.texts ?? []), newText] }
+    ))
+    setActive({ type: "text", slideIndex, textId: newText.id })
+  }
+
+  function handleTextItemChange(slideIndex: number, textId: string, updates: Partial<TextItem>) {
+    pushHistory()
+    setSlides(prev => prev.map((s, i) =>
+      i !== slideIndex ? s : {
+        ...s,
+        texts: s.texts?.map(t => t.id === textId ? { ...t, ...updates } : t)
+      }
+    ))
+  }
+
+  function handleTextItemEdit(slideIndex: number, textId: string, text: string) {
+    pushHistory()
+    handleTextItemChange(slideIndex, textId, { text })
+  }
+
+  function handleDeleteElement(
+    slideIndex: number,
+    type: "title" | "content" | "image" | "shape" | "text",
+    id?: string
+  ) {
+    pushHistory()
+    setSlides(prev => prev.map((s, i) => {
+      if (i !== slideIndex) return s
+      if (type === "title") return { ...s, title: "" }
+      if (type === "content") return { ...s, body_text: "" }
+      if (type === "image") return { ...s, image_url: undefined, image_credit: undefined }
+      if (type === "shape" && id) return { ...s, shapes: s.shapes?.filter(sh => sh.id !== id) }
+      if (type === "text" && id) return { ...s, texts: s.texts?.filter(t => t.id !== id) }
+      return s
+    }))
+    setActive(null)
+  }
+  // ▲▲▲ FITUR-TEKS: SELESAI ▲▲▲
   
   // tambahan modifikasi
   function handleLayoutChange(slideIndex: number, elementId: string, layout: ElementLayout) {
+    pushHistory()
     setSlides(prev => prev.map((s, i) =>
       i !== slideIndex ? s : { ...s, layout: { ...s.layout, [elementId]: layout } }
     ))
@@ -436,13 +575,14 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
   async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = "" // supaya file yang sama bisa dipilih
-    if (!file || !selection) return
-    const slideIndex = selection.slideIndex
+    if (!file || !active) return
+    const slideIndex = active.slideIndex
     setUploadingImage(true)
     try {
       const url = await uploadSlideImage(file)
+      pushHistory()
       setSlides(prev => prev.map((s, i) => (i === slideIndex ? { ...s, image_url: url, image_credit: undefined } : s)))
-      setSelection({ slideIndex, elementId: "image" }) // FITUR-GAMBAR
+      setActive({ type: "element", slideIndex, elementId: "image" })
       toast.success("Gambar ditambahkan")
     } catch (err: any) {
       toast.error(err?.message || "Gagal upload gambar")
@@ -452,10 +592,11 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
   }
 
   function handleImageRemove() {
-    if (!selection) return
-    const slideIndex = selection.slideIndex
+    if (!active) return
+    pushHistory()
+    const slideIndex = active.slideIndex
     setSlides(prev => prev.map((s, i) => (i === slideIndex ? { ...s, image_url: undefined, image_credit: undefined } : s)))
-    setSelection(null) // FITUR-GAMBAR
+    setActive(null) // FITUR-GAMBAR
   }
   // FITUR-GAMBAR: SELESAI
 
@@ -499,8 +640,8 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
           <CanvasWorkspace
             first={{ w: CARD_W, h: CARD_H }}
             all={{ w: slides.length * CARD_W + (slides.length - 1) * CARD_GAP, h: CARD_H }}
-            onBackgroundTap={() => { setSelection(null); setEditing(null)}} // FIX-DESELECT
-            isEditing={!!editing} //FITUR-EDIT-TEXT
+            onBackgroundTap={() => setActive(null)} // FIX-DESELECT
+            isEditing={isEditingNow}
           >
             {(_zoom) => (
               <div className="flex items-start" style={{ gap: CARD_GAP }}>
@@ -511,14 +652,14 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                       theme={selectedTheme}
                       totalSlides={slides.length}
                       brandIdentity={brandIdentity}
-                      selectedId={selection?.slideIndex === i ? selection.elementId : null}
-                      onSelect={(id) => setSelection(id ? { slideIndex: i, elementId: id } : null)}
-                      onLayoutChange={(elementId, layout) => handleLayoutChange(i, elementId, layout)}
                       stageRef={stageRefs.current[i]}
-                      editingId={editing?.slideIndex === i ? editing.elementId : null}   // FITUR-EDIT-TEKS
-                      onEditStart={(id) => setEditing({ slideIndex: i, elementId: id })}   // FITUR-EDIT-TEKS
-                      onEditEnd={() => setEditing(null)} // FITUR-EDIT-TEKS
-                      onTextChange={(id, text) => handleTextChange(i, id, text)}   // FITUR-EDIT-TEKS
+                      active={active?.slideIndex === i ? active : null}
+                      onActive={(next) => setActive(next ? { ...next, slideIndex: i } : null)}
+                      onLayoutChange={(elementId, layout) => handleLayoutChange(i, elementId, layout)}
+                      onShapeChange={(shapeId, updates) => handleShapeChange(i, shapeId, updates)}
+                      onTextChange={(id, text) => handleTextChange(i, id, text)}
+                      onTextItemChange={(textId, updates) => handleTextItemChange(i, textId, updates)}
+                      onTextItemEdit={(textId, text) => handleTextItemEdit(i, textId, text)}
                     />
                   </div>
                 ))}
@@ -548,6 +689,12 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
               {slides[0]?.title || topic || "Carousel"}
             </h2>
             <div className="flex-1 flex justify-end items-center gap-1">
+              <Button variant="ghost" size="icon" onClick={handleUndo} disabled={past.length === 0} title="Undo">
+                <Undo2 className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleRedo} disabled={future.length === 0} title="Redo">
+                <Redo2 className="h-4 w-4" />
+              </Button>
               
               <Button
                 variant="ghost"
@@ -574,195 +721,272 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
             </button>
 
             <div className={`fixed top-0 right-0 h-full w-72 bg-white shadow-2xl z-30 transition-transform duration-300 pointer-events-auto ${sidebarOpen ? "translate-x-0" : "translate-x-full"}`}>
-              <div className="p-5 flex flex-col gap-6 overflow-y-auto h-full">
-                <h3 className="text-lg font-semibold">Pengaturan</h3>
+              <div className="flex flex-col h-full overflow-y-auto">
 
-                <div className="flex flex-col gap-2">
-                  <span className="text-sm font-medium text-gray-700">Nama Akun</span>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Tampilkan di slide</span>
-                    <button
-                      onClick={() => setBrandIdentity(prev => ({ ...prev, show: !prev.show }))}
-                      className={`w-11 h-6 rounded-full transition-colors relative ${brandIdentity.show ? "bg-purple-600" : "bg-gray-300"}`}
-                    >
-                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${brandIdentity.show ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-
-                  <input
-                    type="text"
-                    value={brandIdentity.handle}
-                    onChange={(e) => setBrandIdentity(prev => ({ ...prev, handle: e.target.value }))}
-                    placeholder="@handle"
-                    className="mt-2 border rounded-lg px-3 py-2 text-sm"
-                  />
-                  <input
-                    type="text"
-                    value={brandIdentity.website}
-                    onChange={(e) => setBrandIdentity(prev => ({ ...prev, website: e.target.value }))}
-                    placeholder="website.com"
-                    className="border rounded-lg px-3 py-2 text-sm"
-                  />
+                {/* ── Header ── */}
+                <div className="sticky top-0 bg-white z-10 px-4 py-3 border-b flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-800">Tool Design</span>
+                  <button onClick={() => setSidebarOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                 </div>
 
-                {/* ▼▼▼ FITUR-GAMBAR: MULAI (blok sidebar gambar slide) ▼▼▼ */}
-                <div className="flex flex-col gap-2 pt-4 border-t">
-                  <span className="text-sm font-medium text-gray-700">Gambar Slide</span>
-                  {selection ? (
-                    <>
-                      <span className="text-xs text-gray-500">Slide {selection.slideIndex + 1}</span>
-                      <input
-                        ref={imageInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        onChange={handleImagePick}
-                      />
-                      <Button variant="outline" disabled={uploadingImage} onClick={() => imageInputRef.current?.click()}>
-                        {uploadingImage ? "Mengunggah..." : slides[selection.slideIndex]?.image_url ? "Ganti Gambar" : "Tambah Gambar"}
-                      </Button>
-                      {slides[selection.slideIndex]?.image_url && (
-                        <Button variant="ghost" className="text-red-600" onClick={handleImageRemove}>Hapus Gambar</Button>
-                      )}
-                      {/* ▼▼▼ FITUR-GAMBAR: MULAI (kredit Pexels) ▼▼▼ */}
-                      {slides[selection.slideIndex]?.image_credit && (
-                        <span className="text-xs text-gray-500">
-                          Foto oleh{" "}
-                          <a href={slides[selection.slideIndex]!.image_credit!.url} target="_blank" rel="noreferrer" className="underline">
-                            {slides[selection.slideIndex]!.image_credit!.name}
-                          </a>{" "}
-                          di{" "}
-                          <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">Pexels</a>
-                        </span>
-                      )}
-                      {/* ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲ */}
-                    </>
+                <div className="flex flex-col gap-0 px-4 py-3">
+
+                  {/* ── 1. KONTEKS ELEMEN TERPILIH ── */}
+                  {!active ? (
+                    <div className="py-6 text-center text-xs text-gray-400">
+                      Pilih elemen di slide untuk mengedit
+                    </div>
                   ) : (
-                    <span className="text-xs text-gray-400">Pilih satu elemen di slide dulu (judul, isi, dll), lalu tombol upload muncul di sini.</span>
-                  )}
-                </div>
-                {/* ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲ */}
+                    <div className="flex flex-col gap-3 pb-4 border-b">
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        {selectedShape ? "Shape" : activeTextId ? "Teks Bebas" : activeElementId === "image" ? "Gambar" : activeElementId === "title" ? "Judul" : "Isi"}
+      </span>
 
-                {/* ▼▼▼ FITUR-GAMBAR: MULAI (slider opacity gambar) ▼▼▼ */}
-                {selection?.elementId === "image" && (
-                  <div className="flex flex-col gap-2 pt-4 border-t">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Opacity Gambar</span>
-                      <span className="text-xs text-gray-500">
-                        {Math.round((slides[selection.slideIndex]?.layout?.image?.opacity ?? 0.4) * 100)}%
-                      </span>
-                    </div>
-                    <input
-                      type="range" min={5} max={100} step={1}
-                      value={Math.round((slides[selection.slideIndex]?.layout?.image?.opacity ?? 0.4) * 100)}
-                      onChange={(e) => {
-                        const cur = slides[selection.slideIndex]?.layout?.image ?? { x: 0, y: 0 }
-                        handleLayoutChange(selection.slideIndex, "image", { ...cur, opacity: Number(e.target.value) / 100 })
-                      }}
-                      className="w-full accent-purple-600"
-                    />
-                  </div>
-                )}
-                {/* ▲▲▲ FITUR-GAMBAR: SELESAI ▲▲▲ */}
-                
-                <div className="flex flex-col gap-2 pt-4 border-t">
-                  <span className="text-sm font-medium text-gray-700">Warna Tema</span>
-                  {Object.entries(
-                    PRESET_THEMES.reduce((acc: Record<string, Theme[]>, t) => {
-                      const cat = t.label.split(" — ")[0]
-                      acc[cat] = acc[cat] || []
-                      acc[cat].push(t)
-                      return acc
-                    }, {} as Record<string, Theme[]>)
-                  ).map(([category, themesInCat]) => (
-                    <div key={category} className="flex flex-col gap-1.5">
-                      <span className="text-xs text-gray-400">{category}</span>
-                      <div className="flex gap-2">
-                        {themesInCat.map((t) => (
-                          <button
-                            key={t.name}
-                            onClick={() => setSelectedTheme(t)}
-                            title={t.label}
-                            className={`w-9 h-9 rounded-full border-2 ${selectedTheme?.name === t.name ? "border-purple-600" : "border-gray-200"}`}
-                            style={{ background: `linear-gradient(135deg, ${t.accent} 50%, ${t.bg} 50%)` }}
+                      {/* Judul atau Isi: ukuran teks + perataan */}
+                      {selection && (selection.elementId === "title" || selection.elementId === "content") && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">Ukuran Teks</span>
+                            <span className="text-xs text-gray-400">
+                              {slides[selection.slideIndex]?.layout?.[selection.elementId]?.fontSize ?? "auto"}px
+                            </span>
+                          </div>
+                          <input
+                            type="range" min={16} max={120} step={1}
+                            value={slides[selection.slideIndex]?.layout?.[selection.elementId]?.fontSize ?? (selection.elementId === "title" ? 75 : 45)}
+                            onChange={(e) => {
+                              const cur = slides[selection.slideIndex]?.layout?.[selection.elementId] ?? { x: 0, y: 0 }
+                              handleLayoutChange(selection.slideIndex, selection.elementId, { ...cur, fontSize: Number(e.target.value) })
+                            }}
+                            className="w-full accent-purple-600"
                           />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                          <div className="flex gap-1">
+                            {(["left", "center", "right"] as const).map((a) => {
+                              const curLayout = slides[selection.slideIndex]?.layout?.[selection.elementId]
+                              const isActive = (curLayout as any)?.align === a
+                              return (
+                                <button key={a}
+                                  onClick={() => handleLayoutChange(selection.slideIndex, selection.elementId, { ...(curLayout ?? { x: 0, y: 0 }), align: a } as any)}
+                                  className={`flex-1 py-1.5 rounded-lg border text-xs ${isActive ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600"}`}
+                                >
+                                  {a === "left" ? "Kiri" : a === "center" ? "Tengah" : "Kanan"}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </>
+                      )}
 
-                {selection && (selection.elementId === "title" || selection.elementId === "content") && (
-                  <div className="flex flex-col gap-2 pt-4 border-t">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Ukuran Teks</span>
-                      <span className="text-xs text-gray-500">
-                        {slides[selection.slideIndex]?.layout?.[selection.elementId]?.fontSize ?? "auto"}px
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={16} max={120} step={1}
-                      value={
-                        slides[selection.slideIndex]?.layout?.[selection.elementId]?.fontSize
-                        ?? (selection.elementId === "title" ? 75 : 45)
-                      }
-                      onChange={(e) => {
-                        // const fontSize = Number(e.target.value)
-                        // const cur = slides[selection.slideIndex]?.layout?.[selection.elementId] ?? { x: 0, y: 0 }
-                        const cur = slides[selection.slideIndex]?.layout?.[selection.elementId] ?? { x: 0, y: 0}
-                        handleLayoutChange(selection.slideIndex, selection.elementId, {
-                          ...cur,
-                          fontSize: Number(e.target.value),
-                        })
-                      }}
-                      className="w-full accent-purple-600"
-                    />
-                  </div>
-                )}
+                      {/* Gambar: opacity */}
+                      {activeElementId === "image" && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">Opacity</span>
+                            <span className="text-xs text-gray-400">
+                              {Math.round((slides[activeSlideIndex]?.layout?.image?.opacity ?? 0.4) * 100)}%
+                            </span>
+                          </div>
+                          <input
+                            type="range" min={5} max={100} step={1}
+                            value={Math.round((slides[activeSlideIndex]?.layout?.image?.opacity ?? 0.4) * 100)}
+                            onChange={(e) => {
+                              const cur = slides[activeSlideIndex]?.layout?.image ?? { x: 0, y: 0 }
+                              handleLayoutChange(activeSlideIndex, "image", { ...cur, opacity: Number(e.target.value) / 100 })
+                            }}
+                            className="w-full accent-purple-600"
+                          />
+                        </>
+                      )}
 
-                {/* Custom color */}
-                <div className="flex flex-col gap-2 pt-4 border-t">
-                  <span className="text-sm font-medium text-gray-700">Warna Custom</span>
-                  <div className="flex flex-col gap-2">
-                    {(["bg", "bgAlt", "text", "textMuted", "accent", "highlight"] as const).map((field) => (
-                      <div key={field} className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500">{field}</span>
-                        <input
-                          type="color"
-                          value={selectedTheme?.[field] || "#000000"}
-                          onChange={(e) => setSelectedTheme(prev => ({ ...prev, [field]: e.target.value }))}
-                          className="w-9 h-9 rounded border cursor-pointer"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                {/* Perataan teks */}
-                {selection && (selection.elementId === "title" || selection.elementId === "content") && (
-                  <div className="flex flex-col gap-2 pt-4 border-t">
-                    <span className="text-sm font-medium text-gray-700">Perataan Teks</span>
-                    <div className="flex gap-1">
-                      {(["left", "center", "right"] as const).map((a) => {
-                        const curLayout = slides[selection.slideIndex]?.layout?.[selection.elementId]
-                        const isActive = (curLayout as any)?.align === a
+                      {/* Shape: warna isi, tepi, tebal, sudut */}
+                      {selectedShape && (() => {
+                        const shape = slides[selectedShape.slideIndex]?.shapes?.find(s => s.id === selectedShape.shapeId)
+                        if (!shape) return null
                         return (
-                          <button
-                            key={a}
-                            onClick={() => handleLayoutChange(selection.slideIndex, selection.elementId, {
-                              ...(curLayout ?? { x: 0, y: 0 }),
-                              align: a,
-                            } as any)}
-                            className={`flex-1 py-2 rounded-lg border text-xs ${isActive ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600"}`}
-                          >
-                            {a === "left" ? "Kiri" : a === "center" ? "Tengah" : "Kanan"}
+                          <>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500">Warna isi</span>
+                              <input type="color" value={shape.fill}
+                                onChange={(e) => handleShapeChange(selectedShape.slideIndex, shape.id, { fill: e.target.value })}
+                                className="w-9 h-9 rounded border cursor-pointer" />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500">Warna tepi</span>
+                              <input type="color" value={shape.stroke === "transparent" ? "#000000" : shape.stroke}
+                                onChange={(e) => handleShapeChange(selectedShape.slideIndex, shape.id, { stroke: e.target.value, strokeWidth: Math.max(1, shape.strokeWidth) })}
+                                className="w-9 h-9 rounded border cursor-pointer" />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500">Tebal tepi</span>
+                              <input type="range" min={0} max={20} step={1} value={shape.strokeWidth}
+                                onChange={(e) => handleShapeChange(selectedShape.slideIndex, shape.id, { strokeWidth: Number(e.target.value) })}
+                                className="w-32 accent-purple-600" />
+                            </div>
+                            {shape.type === "rect" && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-500">Sudut bulat</span>
+                                <input type="range" min={0} max={100} step={1} value={shape.cornerRadius ?? 0}
+                                  onChange={(e) => handleShapeChange(selectedShape.slideIndex, shape.id, { cornerRadius: Number(e.target.value) })}
+                                  className="w-32 accent-purple-600" />
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </div>
+                  )}
+
+                  {/* ── 2. AKSI ELEMEN ── */}
+                  {active && (
+                    <div className="flex gap-2 py-3 border-b">
+                      <Button variant="outline" size="sm" className="flex-1 text-xs gap-1"
+                        onClick={() => {
+                          const slideIdx = activeSlideIndex
+                          handleAddText(slideIdx)
+                        }}>
+                        + Teks
+                      </Button>
+                      <Button variant="ghost" size="sm" className="flex-1 text-xs text-red-600"
+                        onClick={() => {
+                          const slideIdx = activeSlideIndex ?? activeSlideIndex ?? activeSlideIndex ?? 0
+                          if (selectedShape) handleDeleteElement(selectedShape.slideIndex, "shape", selectedShape.shapeId)
+                          else if (selectedTextItem) handleDeleteElement(selectedTextItem.slideIndex, "text", selectedTextItem.textId)
+                          else if (activeElementId === "image") handleDeleteElement(slideIdx, "image")
+                          else if (activeElementId === "title") handleDeleteElement(slideIdx, "title")
+                          else if (activeElementId === "content") handleDeleteElement(slideIdx, "content")
+                        }}>
+                        Hapus
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* ── 3. TAMBAH SHAPE ── */}
+                  <div className="flex flex-col gap-2 py-4 border-b">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tambah Shape</span>
+                    <div className="grid grid-cols-3 gap-1">
+                      {([
+                        { type: "rect",     label: "Kotak",     icon: "▭" },
+                        { type: "circle",   label: "Lingkaran", icon: "⬤" },
+                        { type: "triangle", label: "Segitiga",  icon: "▲" },
+                        { type: "pentagon", label: "Pentagon",  icon: "⬠" },
+                        { type: "hexagon",  label: "Hexagon",   icon: "⬡" },
+                        { type: "star",     label: "Bintang",   icon: "★" },
+                      ] as { type: ShapeType; label: string; icon: string }[]).map(({ type, label, icon }) => {
+                        const slideIdx = activeSlideIndex ?? activeSlideIndex ?? activeSlideIndex ?? 0
+                        const count = slides[slideIdx]?.shapes?.length ?? 0
+                        return (
+                          <button key={type}
+                            disabled={count >= 5}
+                            onClick={() => handleAddShape(slideIdx, type)}
+                            className="flex flex-col items-center gap-1 py-2 rounded-lg border text-xs hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <span className="text-lg">{icon}</span>
+                            {label}
                           </button>
                         )
                       })}
                     </div>
+                    {(slides[activeSlideIndex ?? 0]?.shapes?.length ?? 0) >= 5 && (
+                      <span className="text-xs text-gray-400 text-center">Maks 5 shapes per slide</span>
+                    )}
                   </div>
-                )}
+
+                  {/* ── 4. GAMBAR SLIDE ── */}
+                  <div className="flex flex-col gap-2 py-4 border-b">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Gambar Slide</span>
+                    {selection ? (
+                      <>
+                        <span className="text-xs text-gray-500">Slide {selection.slideIndex + 1}</span>
+                        <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImagePick} />
+                        <Button variant="outline" size="sm" disabled={uploadingImage} onClick={() => imageInputRef.current?.click()}>
+                          {uploadingImage ? "Mengunggah..." : slides[selection.slideIndex]?.image_url ? "Ganti Gambar" : "Tambah Gambar"}
+                        </Button>
+                        {slides[selection.slideIndex]?.image_url && (
+                          <Button variant="ghost" size="sm" className="text-red-600 text-xs" onClick={handleImageRemove}>Hapus Gambar</Button>
+                        )}
+                        {slides[selection.slideIndex]?.image_credit && (
+                          <span className="text-xs text-gray-400">
+                            Foto oleh <a href={slides[selection.slideIndex]!.image_credit!.url} target="_blank" rel="noreferrer" className="underline">{slides[selection.slideIndex]!.image_credit!.name}</a> di <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">Pexels</a>
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-xs text-gray-400">Pilih elemen di slide dulu</span>
+                    )}
+                  </div>
+
+                  {/* ── 5. BRAND ── */}
+                  <div className="flex flex-col gap-2 py-4 border-b">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nama Akun</span>
+                      <button
+                        onClick={() => setBrandIdentity(prev => ({ ...prev, show: !prev.show }))}
+                        className={`w-10 h-5 rounded-full transition-colors ${brandIdentity.show ? "bg-purple-600" : "bg-gray-300"}`}>
+                        <div className={`w-4 h-4 rounded-full bg-white mx-0.5 transition-transform ${brandIdentity.show ? "translate-x-5" : "translate-x-0"}`} />
+                      </button>
+                    </div>
+                    {brandIdentity.show && (
+                      <>
+                        <input type="text" value={brandIdentity.handle}
+                          onChange={(e) => setBrandIdentity(prev => ({ ...prev, handle: e.target.value }))}
+                          placeholder="@username" className="border rounded-lg px-3 py-2 text-sm" />
+                        <input type="text" value={brandIdentity.website}
+                          onChange={(e) => setBrandIdentity(prev => ({ ...prev, website: e.target.value }))}
+                          placeholder="website.com" className="border rounded-lg px-3 py-2 text-sm" />
+                      </>
+                    )}
+                  </div>
+
+                  {/* ── 6. TEMA ── */}
+                  <div className="flex flex-col gap-3 py-4">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tema Warna</span>
+                    <div className="flex gap-1 mb-1">
+                      <button onClick={() => setColorMode("preset")}
+                        className={`flex-1 py-1.5 rounded-lg text-xs ${colorMode === "preset" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-600"}`}>
+                        Preset
+                      </button>
+                      <button onClick={() => setColorMode("custom")}
+                        className={`flex-1 py-1.5 rounded-lg text-xs ${colorMode === "custom" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-600"}`}>
+                        Custom
+                      </button>
+                    </div>
+                    {colorMode === "preset" ? (
+                      Object.entries(
+                        PRESET_THEMES.reduce((acc: Record<string, Theme[]>, t) => {
+                          const cat = t.label.split(" — ")[0]
+                          acc[cat] = acc[cat] || []
+                          acc[cat].push(t)
+                          return acc
+                        }, {})
+                      ).map(([category, themesInCat]) => (
+                        <div key={category} className="flex flex-col gap-1.5">
+                          <span className="text-xs text-gray-400">{category}</span>
+                          <div className="flex gap-2">
+                            {themesInCat.map((t) => (
+                              <button key={t.name}
+                                onClick={() => { pushHistory(); setSelectedTheme(t) }}
+                                title={t.label}
+                                className={`w-9 h-9 rounded-full border-2 ${selectedTheme?.name === t.name ? "border-purple-600" : "border-gray-200"}`}
+                                style={{ background: `linear-gradient(135deg, ${t.accent} 50%, ${t.bg} 50%)` }} />
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {(["bg", "bgAlt", "text", "textMuted", "accent", "highlight"] as const).map((field) => (
+                          <div key={field} className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">{field}</span>
+                            <input type="color"
+                              value={selectedTheme?.[field] || "#000000"}
+                              onChange={(e) => { pushHistory(); setSelectedTheme(prev => ({ ...prev, [field]: e.target.value })) }}
+                              className="w-9 h-9 rounded border cursor-pointer" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
               </div>
             </div>
           </>
