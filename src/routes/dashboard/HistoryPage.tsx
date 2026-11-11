@@ -38,6 +38,10 @@ export function HistoryPage() {
 
   const [isSelectionMode, setIsSelectionMode] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<
+    { type: "single"; id: string; title: string } | { type: "bulk" } | null
+  >(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const pressTimer = useRef<NodeJS.Timeout | null>(null)
   const cancelRef = useRef<{ cancelled: boolean }>({ cancelled: false })
 
@@ -98,6 +102,15 @@ export function HistoryPage() {
       console.error("Bulk Delete Error:", err)
       toast.error(`Gagal: ${err.message || "Terjadi kesalahan"}`)
     }
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+    if (deleteTarget.type === "single") await handleDelete(deleteTarget.id)
+    else await handleBulkDelete()
+    setIsDeleting(false)
+    setDeleteTarget(null)
   }
 
   const handleNext = () => {
@@ -195,7 +208,7 @@ export function HistoryPage() {
             </Button>
           ) : null}
           {selectedIds.size > 0 && (
-            <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="gap-2">
+            <Button variant="destructive" size="sm" onClick={() => setDeleteTarget({ type: "bulk" })} className="gap-2">
               <Trash2 size={16} /> Hapus Terpilih ({selectedIds.size})
             </Button>
           )}
@@ -283,7 +296,7 @@ export function HistoryPage() {
                 {selectedHistory.topic}
               </h3>
               <div className="flex gap-2 shrink-0">
-                <Button variant="ghost" size="icon" onClick={() => handleDelete(selectedHistory.id)} className="text-destructive">
+                <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ type: "single", id: selectedHistory.id, title: selectedHistory.topic })} className="text-destructive">
                   <Trash2 size={18} />
                 </Button>
                 <Button variant="ghost" size="icon" onClick={() => setSelectedHistory(null)}>
@@ -391,6 +404,43 @@ export function HistoryPage() {
           >
             <span className="text-white font-medium">Batal</span>
           </Button>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !isDeleting && setDeleteTarget(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-background p-6 shadow-xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold">
+              {deleteTarget.type === "bulk"
+                ? `Hapus ${selectedIds.size} riwayat?`
+                : "Hapus riwayat ini?"}
+            </h3>
+            <div className="text-sm text-muted-foreground space-y-1">
+              {deleteTarget.type === "bulk" ? (
+                <p>Semua riwayat yang dipilih akan dihapus permanen.</p>
+              ) : (
+                <p className="line-clamp-2 break-words font-medium text-foreground">
+                  {deleteTarget.title || "Riwayat ini"}
+                </p>
+              )}
+              <p>Tindakan ini nggak bisa dibatalkan.</p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" disabled={isDeleting} onClick={() => setDeleteTarget(null)}>
+                Batal
+              </Button>
+              <Button variant="destructive" disabled={isDeleting} onClick={confirmDelete} className="gap-2">
+                {isDeleting && <Loader2 size={16} className="animate-spin" />}
+                Hapus
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 </div>

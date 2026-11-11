@@ -101,6 +101,12 @@ const FONT = "Plus Jakarta Sans"
 const WATERMARK = "Made with Glito"
 const DEFAULT_THEME = PRESET_THEMES[0]
 
+const FOCUS_FONT_MAP = {
+  headline: { titleMax: 85, titleMin: 60, bodyMax: 55, bodyMin: 35 },
+  body:     { titleMax: 75, titleMin: 40, bodyMax: 55, bodyMin: 44 },
+  balanced: { titleMax: 75, titleMin: 42, bodyMax: 45, bodyMin: 44 },
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function resolveTheme(t: any): Theme {
   return t ? { ...DEFAULT_THEME, ...t } : DEFAULT_THEME
@@ -171,6 +177,19 @@ function calcDefaultLayout(
   const imageLayout: ElementLayout = { x: 0, y: 0, width: CANVAS_W, height: CANVAS_H, opacity: 0.4 }
 
   return { title: titleLayout, content: contentLayout, geser: geserLayout, brand: brandLayout, image: imageLayout }
+}
+
+// Helper resize teks slider
+export function getResolvedLayout(slide: Slide, id: string): ElementLayout {
+  const comp = resolveComposition(slide.composition)
+  const f = FOCUS_FONT_MAP[comp.focus as keyof typeof FOCUS_FONT_MAP] || FOCUS_FONT_MAP.balanced
+  const titleSize = getFontSize(slide.title, f.titleMax, f.titleMin)
+  const bodySize  = getFontSize(slide.body_text, f.bodyMax, f.bodyMin)
+  const defaults = calcDefaultLayout(slide, comp, titleSize, bodySize)
+  const base: ElementLayout = { ...defaults[id], ...(slide.layout?.[id] ?? {}) }
+  if (id === "title" && base.fontSize == null) base.fontSize = titleSize
+  if (id === "content" && base.fontSize == null) base.fontSize = bodySize
+  return base
 }
 
 // ▼▼▼ FITUR-GAMBAR: MULAI (gambar sebagai elemen) ▼▼▼
@@ -380,12 +399,7 @@ function SlideLayer(
   const accentTxt   = contrastColor(accentBg)
   const textAlign   = alignment === "center" ? "center" : alignment === "left" ? "left" : "right"
 
-  const focusMap = {
-    headline: { titleMax: 85, titleMin: 60, bodyMax: 35, bodyMin: 25 },
-    body:     { titleMax: 75, titleMin: 40, bodyMax: 45, bodyMin: 34 },
-    balanced: { titleMax: 75, titleMin: 42, bodyMax: 45, bodyMin: 34 },
-  }
-  const f = focusMap[comp.focus as keyof typeof focusMap] || focusMap.balanced
+  const f = FOCUS_FONT_MAP[comp.focus as keyof typeof FOCUS_FONT_MAP] || FOCUS_FONT_MAP.balanced
   const titleSize = getFontSize(slide.title, f.titleMax, f.titleMin)
   const bodySize  = getFontSize(slide.body_text, f.bodyMax, f.bodyMin)
 

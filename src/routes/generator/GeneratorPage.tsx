@@ -6,7 +6,7 @@ import { deriveDefaultHandle } from "@/lib/brandDefaults"
 import { trackEvent } from "@/lib/trackerEvent"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { SlideRenderer, type Slide, type BrandIdentity, type ElementLayout, type ShapeItem, type ShapeType, CANVAS_W, CANVAS_H, type TextItem, type ActiveElement } from "@/components/carousel/SlideRenderer"
+import { SlideRenderer, type Slide, type BrandIdentity, type ElementLayout, type ShapeItem, type ShapeType, CANVAS_W, CANVAS_H, type TextItem, type ActiveElement, getResolvedLayout } from "@/components/carousel/SlideRenderer"
 import { GenerationControls } from "@/components/carousel/GenerationControls"
 import { PRESET_THEMES, type Theme } from "@/lib/themes"
 import Konva from "konva"
@@ -748,14 +748,14 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-gray-500">Ukuran Teks</span>
                             <span className="text-xs text-gray-400">
-                              {slides[selection.slideIndex]?.layout?.[selection.elementId]?.fontSize ?? "auto"}px
+                              {getResolvedLayout(slides[selection.slideIndex], selection.elementId).fontSize}px
                             </span>
                           </div>
                           <input
                             type="range" min={16} max={120} step={1}
-                            value={slides[selection.slideIndex]?.layout?.[selection.elementId]?.fontSize ?? (selection.elementId === "title" ? 75 : 45)}
+                            value={getResolvedLayout(slides[selection.slideIndex], selection.elementId).fontSize ?? 45}
                             onChange={(e) => {
-                              const cur = slides[selection.slideIndex]?.layout?.[selection.elementId] ?? { x: 0, y: 0 }
+                              const cur = getResolvedLayout(slides[selection.slideIndex], selection.elementId)
                               handleLayoutChange(selection.slideIndex, selection.elementId, { ...cur, fontSize: Number(e.target.value) })
                             }}
                             className="w-full accent-purple-600"
@@ -766,7 +766,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                               const isActive = (curLayout as any)?.align === a
                               return (
                                 <button key={a}
-                                  onClick={() => handleLayoutChange(selection.slideIndex, selection.elementId, { ...(curLayout ?? { x: 0, y: 0 }), align: a } as any)}
+                                  onClick={() => handleLayoutChange(selection.slideIndex, selection.elementId, { ...getResolvedLayout(slides[selection.slideIndex], selection.elementId), align: a } as any)}
                                   className={`flex-1 py-1.5 rounded-lg border text-xs ${isActive ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600"}`}
                                 >
                                   {a === "left" ? "Kiri" : a === "center" ? "Tengah" : "Kanan"}
