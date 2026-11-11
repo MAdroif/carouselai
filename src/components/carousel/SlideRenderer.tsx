@@ -179,14 +179,15 @@ function SlideImage({ url, width, height, opacity }: { url: string; width: numbe
   // Selama gambar belum termuat, tetap beri kotak kosong supaya bingkai pilihan punya ukuran
   if (!img) return <Rect width={width} height={height} fill="rgba(0,0,0,0)" />
   // Mode "cover": isi kotak tanpa gepeng, kelebihan dipotong rata tengah
-  const scale = Math.max(width / img.width, height / img.height)
-  const cropW = width / scale
-  const cropH = height / scale
+  const scale = Math.min(width / img.width, height / img.height)
+  const renderW = img.width * scale
+  const renderH = img.height * scale
+  const offsetX = (width - renderW) / 2
+  const offsetY = (height - renderH) / 2
   return (
     <KonvaImage
-      image={img} width={width} height={height} opacity={opacity}
-      cropX={(img.width - cropW) / 2} cropY={(img.height - cropH) / 2}
-      cropWidth={cropW} cropHeight={cropH}
+      image={img} width={renderW} height={renderH} opacity={opacity}
+      x={offsetX} y={offsetY}
     />
   )
 }
@@ -969,8 +970,8 @@ function SlideLayer(
       )}
 
       {/* Watermark */}
-      <Text x={0} y={CANVAS_H - 70} width={CANVAS_W} text={WATERMARK}
-        fontSize={18} fontFamily={FONT} fontStyle="500"
+      <Text x={0} y={CANVAS_H - 80} width={CANVAS_W} text={WATERMARK}
+        fontSize={32} fontFamily={FONT} fontStyle="500"
         fill={mutedColor} opacity={0.6} align="center" />
 
       {/* Garis magnet */}
