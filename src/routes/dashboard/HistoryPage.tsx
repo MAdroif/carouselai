@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from "react"
+import { useNavigate } from "react-router-dom"
 import { getHistory, deleteCarousel, getBrandSettings } from "@/lib/db"
 import { deriveDefaultHandle } from "@/lib/brandDefaults"
 import { supabase } from "@/lib/supabase"
 import { Loader2, Trash2, X, Layout, ChevronLeft, ChevronRight, Search,
-CheckSquare, Square, MoreVertical, FileImage, FileText, AlertCircle } from "lucide-react"
+CheckSquare, Square, MoreVertical, FileImage, FileText, AlertCircle, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
@@ -12,6 +13,7 @@ import { exportPNG, exportPDF } from "@/lib/export"
 import { parseError } from "@/lib/utils"
 
 export function HistoryPage() {
+  const navigate = useNavigate()
   const [history, setHistory] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -296,6 +298,11 @@ export function HistoryPage() {
                 {selectedHistory.topic}
               </h3>
               <div className="flex gap-2 shrink-0">
+                <Button variant="ghost" size="icon" onClick={() => navigate("/app", {
+                  state: { editRequest: { id: selectedHistory.id, topic: selectedHistory.topic, content: selectedHistory.content } },
+                })}>
+                  <Pencil size={18} />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ type: "single", id: selectedHistory.id, title: selectedHistory.topic })} className="text-destructive">
                   <Trash2 size={18} />
                 </Button>

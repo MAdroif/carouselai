@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef, useLayoutEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Loader2, Minus, Plus, Repeat, Minimize2, Maximize2, ImageIcon } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -24,6 +24,20 @@ export function GenerationControls({
 }: GenerationControlsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<string>("Edukasi & Psikologi")
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [grow, setGrow] = useState(0)
+  const COLLAPSED_H = 28
+  const MAX_H = 148
+  
+  useLayoutEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    if (isExpanded) { el.style.height = ""; setGrow(0); return }
+    el.style.height = "auto"
+    const h = Math.max(COLLAPSED_H, Math.min(el.scrollHeight, MAX_H))
+    el.style.height = `${h}px`
+    setGrow(h - COLLAPSED_H)
+  }, [topic, isExpanded, inputMode])
 
   const toggleMode = () => {
     setInputMode(inputMode === 'topic' ? 'script' : 'topic')
@@ -46,7 +60,12 @@ export function GenerationControls({
   }
 
   return (
-    <div className={`w-full max-w-4xl mx-auto px-8 relative ${isExpanded ? 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm' : ''}`}>
+    <div
+      className={isExpanded
+        ? 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm'
+        : 'w-full max-w-4xl mx-auto px-8 relative'}
+      onClick={() => isExpanded && setIsExpanded(false)}
+    >
 
       {!isExpanded && (
         <div className="mb-30 mt-15 text-center relative">
@@ -59,21 +78,17 @@ export function GenerationControls({
         </div>
       )}
 
-      <div className={`rounded-3xl bg-white border dark:border-[#2e2e2e] dark:bg-[#242424] p-5 shadow-sm relative w-full flex flex-col ${isExpanded ? 'max-w-4xl h-[80vh]' : ''}`}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ marginTop: isExpanded ? 0 : -grow }}
+        className={`rounded-3xl bg-white border dark:border-[#2e2e2e] dark:bg-[#242424] p-5 shadow-sm relative w-full flex flex-col ${isExpanded ? 'max-w-4xl h-[80vh]' : ''}`}>
         <textarea
+          ref={textareaRef}
           rows={1}
-          className={`w-full min-h-[24px] max-h-[160px] resize-none border-none outline-none text-md bg-transparent overflow-y-auto`}
-          style={{ height: isExpanded ? '100%' : '28px' }}
+          className={`w-full resize-none border-none outline-none text-md bg-transparent overflow-y-auto ${inputMode === 'script' ? 'pr-10' : ''} ${isExpanded ? 'flex-1 min-h-0' : ''}`}
           placeholder={inputMode === 'topic' ? "Contoh: 5 peluang karir masa depan..." : "Tempel skrip lengkap Anda di sini..."}
           value={topic}
-          onChange={(e) => {
-            setTopic(e.target.value);
-            if (!isExpanded) {
-              e.target.style.height = 'auto';
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
-            }
-          }}
-          
+          onChange={(e) => setTopic(e.target.value)}
         />
 
         {/* Tombol Expand */}

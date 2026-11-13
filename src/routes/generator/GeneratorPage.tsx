@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { useLocation, useNavigate } from "react-router-dom"
 import { saveCarousel, updateCarousel, getBrandSettings, upsertBrandSettings, getCurrentUserEmail, uploadSlideImage } from "@/lib/db"
 import { attachStockImages } from "@/lib/stockPhotos" // FITUR-GAMBAR
 import { deriveDefaultHandle } from "@/lib/brandDefaults"
@@ -238,6 +239,9 @@ const CARD_H = 525
 const CARD_GAP = 48
 
 export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorPageProps) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const editRequest = (location.state as any)?.editRequest ?? null
   const [topic, setTopic] = useState(() => localStorage.getItem("gen_topic") || "")
   const [slideCount, setSlideCount] = useState<number>(5)
   const [slides, setSlides] = useState<Slide[]>(() => loadJSON("gen_slides", []))
@@ -368,6 +372,25 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
     }
   }, [slides, selectedTheme, currentCarouselId])
+
+  // mode edit history
+  useEffect(() => {
+    if (!editRequest) return
+    const c = editRequest.content
+    const loaded: Slide[] = Array.isArray(c) ? c : (c?.slides ?? [])
+    if (loaded.length === 0) {
+      toast.error("Riwayat ini kosong, nggak bisa diedit")
+      navigate("/app", { replace: true, state: null })
+      return
+    }
+    setCurrentCarouselId(editRequest.id)
+    saveJSON("gen_carousel_id", editRequest.id)
+    setSlides(loaded)
+    setSelectedTheme(c?.theme ?? PRESET_THEMES[0])
+    setTopic(editRequest.topic)
+    setPast([]); setFuture([]); setActive(null)
+    navigate("/app", { replace: true, state: null })
+  }, [editRequest])
 
   // Tambah disini:
   useLayoutEffect(() => {
