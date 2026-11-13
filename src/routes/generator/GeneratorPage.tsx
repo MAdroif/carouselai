@@ -7,7 +7,7 @@ import { deriveDefaultHandle } from "@/lib/brandDefaults"
 import { trackEvent } from "@/lib/trackerEvent"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { SlideRenderer, type Slide, type BrandIdentity, type ElementLayout, type ShapeItem, type ShapeType, CANVAS_W, CANVAS_H, type TextItem, type ActiveElement, getResolvedLayout } from "@/components/carousel/SlideRenderer"
+import { SlideRenderer, type Slide, type BrandIdentity, type ElementLayout, type ShapeItem, type ShapeType, CANVAS_W, CANVAS_H, type TextItem, type ActiveElement, getResolvedLayout, isElementBold, FONT_OPTIONS } from "@/components/carousel/SlideRenderer"
 import { GenerationControls } from "@/components/carousel/GenerationControls"
 import { PRESET_THEMES, type Theme } from "@/lib/themes"
 import Konva from "konva"
@@ -358,7 +358,8 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
 
   // TAMBAH setelah useEffect saveJSON
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  
+
+  // useEffect autosave
   useEffect(() => {
     if (!currentCarouselId || slides.length === 0) return
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
@@ -372,6 +373,23 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
     }
   }, [slides, selectedTheme, currentCarouselId])
+
+  // useEffect font opsi
+  const [fontsReady, setFontsReady] = useState(false)
+  useEffect(() => {
+    Promise.all(FONT_OPTIONS.flatMap(f => [
+      document.fonts.load(`400 40px "${f.name}"`),
+      document.fonts.load(`700 40px "${f.name}"`),
+    ])).catch(() => {}).finally(() => setFontsReady(true))
+  }, [])
+  
+  async function loadFontThen(name: string, apply: () => void) {
+    try {
+      await document.fonts.load(`400 40px "${name}"`)
+      await document.fonts.load(`700 40px "${name}"`)
+    } catch {}
+    apply()
+  }
 
   // mode edit history
   useEffect(() => {
@@ -562,6 +580,15 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
     ))
   }
 
+  function handleTextItemLive(slideIndex: number, textId: string, updates: Partial<TextItem>) {
+    setSlides(prev => prev.map((s, i) =>
+      i !== slideIndex ? s : {
+        ...s,
+        texts: s.texts?.map(t => t.id === textId ? { ...t, ...updates } : t)
+      }
+    ))
+  }
+
   function handleTextItemEdit(slideIndex: number, textId: string, text: string) {
     pushHistory()
     handleTextItemChange(slideIndex, textId, { text })
@@ -671,6 +698,7 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                 {slides.map((s, i) => (
                   <div key={i} style={{ width: CARD_W }}>
                     <SlideCard
+                      key={fontsReady ? "ready" : "loading"}
                       slide={s}
                       theme={selectedTheme}
                       totalSlides={slides.length}
@@ -797,9 +825,86 @@ export default function GeneratorPage({ userTokens, onTokensChange }: GeneratorP
                               )
                             })}
                           </div>
+                          {(() => {
+                            const cur = getResolvedLayout(slides[selection.slideIndex], selection.elementId)
+                            const bold = isElementBold(selection.elementId as "title" | "content", cur.bold, selectedTheme)
+                            return (
+                              <button
+                                onClick={() => handleLayoutChange(selection.slideIndex, selection.elementId, { ...cur, bold: !bold } as any)}
+                                className={`w-full py-1.5 rounded-lg border text-sm font-bold ${bold ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600"}`}
+                              >
+                                B Tebal
+                              </button>
+                            )
+                          })()}
+                          {(() => {
+                            const cur = getResolvedLayout(slides[selection.slideIndex], selection.elementId)
+                            return (
+                              <select
+                                value={cur.fontFamily ?? "Plus Jakarta Sans"}
+                                onChange={(e) => {
+                                  const name = e.target.value
+                                  loadFontThen(name, () => handleLayoutChange(selection.slideIndex, selection.elementId, { ...cur, fontFamily: name } as any))
+                                }}
+                                className="w-full rounded-lg border px-2 py-1.5 text-sm bg-white"
+                              >
+                                {FONT_OPTIONS.map(f => <option key={f.name} value={f.name}>{f.label}</option>)}
+                              </select>
+                            )
+                          })()}
                         </>
                       )}
 
+                      {/* Teks bebas: ukuran teks */}
+                      {selectedTextItem && (() => {
+                        const item = slides[selectedTextItem.slideIndex]?.texts?.find(t => t.id === selectedTextItem.textId)
+                        if (!item) return null
+                        return (
+                          <>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500">Ukuran teks</span>
+                              <span className="text-xs text-gray-400">{item.fontSize}px</span>
+                            </div>
+                            <input
+                              type="range" min={12} max={200} step={1}
+                              value={item.fontSize}
+                              onPointerDown={() => pushHistory()}
+                              onChange={(e) => handleTextItemLive(selectedTextItem.slideIndex, item.id, { fontSize: Number(e.target.value) })}
+                              className="w-full accent-purple-600"
+                            />
+                            {(() => {
+                              const isBold = item.fontStyle.includes("bold")
+                              const isItalic = item.fontStyle.includes("italic")
+                              return (
+                                <button
+                                  onClick={() => {
+                                    pushHistory()
+                                    const next = isBold ? (isItalic ? "italic" : "normal") : (isItalic ? "bold italic" : "bold")
+                                    handleTextItemLive(selectedTextItem.slideIndex, item.id, { fontStyle: next })
+                                  }}
+                                  className={`w-full py-1.5 rounded-lg border text-sm font-bold ${isBold ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600"}`}
+                                >
+                                  B
+                                </button>
+                              )
+                            })()}
+                            <select
+                              value={item.fontFamily}
+                              onChange={(e) => {
+                                const name = e.target.value
+                                loadFontThen(name, () => {
+                                  pushHistory()
+                                  handleTextItemLive(selectedTextItem.slideIndex, item.id, { fontFamily: name })
+                                })
+                              }}
+                              className="w-full rounded-lg border px-2 py-1.5 text-sm bg-white"
+                            >
+                              {FONT_OPTIONS.map(f => <option key={f.name} value={f.name}>{f.label}</option>)}
+                            </select>
+                          </>
+                        )
+                      })()}
+                      
                       {/* Gambar: opacity */}
                       {activeElementId === "image" && (
                         <>

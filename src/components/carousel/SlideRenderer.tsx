@@ -29,6 +29,8 @@ export interface ElementLayout {
   width?: number
   fontSize?: number
   align?: "left" | "center" | "right"
+  bold?: boolean
+  fontFamily?: string
   height?: number // FITUR-GAMBAR
   opacity?: number // FITUR-GAMBAR
 }
@@ -98,6 +100,18 @@ export const CANVAS_H = 1350
 const PAD = 110
 const CONTENT_W = CANVAS_W - PAD * 2
 const FONT = "Plus Jakarta Sans"
+export const FONT_OPTIONS = [
+  { name: "Plus Jakarta Sans", label: "Plus Jakarta Sans (bawaan)" },
+  { name: "Poppins", label: "Poppins" },
+  { name: "Montserrat", label: "Montserrat" },
+  { name: "Inter", label: "Inter" },
+  { name: "Nunito", label: "Nunito" },
+  { name: "Bebas Neue", label: "Bebas Neue (judul tegas)" },
+  { name: "Oswald", label: "Oswald (judul ramping)" },
+  { name: "Playfair Display", label: "Playfair Display (elegan)" },
+  { name: "Lora", label: "Lora (serif bacaan)" },
+  { name: "Caveat", label: "Caveat (tulisan tangan)" },
+]
 const WATERMARK = "Made with Glito"
 const DEFAULT_THEME = PRESET_THEMES[0]
 
@@ -190,6 +204,19 @@ export function getResolvedLayout(slide: Slide, id: string): ElementLayout {
   if (id === "title" && base.fontSize == null) base.fontSize = titleSize
   if (id === "content" && base.fontSize == null) base.fontSize = bodySize
   return base
+}
+
+// Helper bold teks
+function elementWeight(id: "title" | "content", bold: boolean | undefined, theme: Theme): string {
+  const themeW = Number(theme.fontWeight)
+  if (id === "title") {
+    if (bold === undefined) return String(theme.fontWeight)
+    return bold ? String(Math.max(themeW, 700)) : "400"
+  }
+  return bold ? "700" : "400"
+}
+export function isElementBold(id: "title" | "content", bold: boolean | undefined, theme: Theme): boolean {
+  return bold ?? (id === "title" ? Number(theme.fontWeight) >= 600 : false)
 }
 
 // ▼▼▼ FITUR-GAMBAR: MULAI (gambar sebagai elemen) ▼▼▼
@@ -604,8 +631,8 @@ function SlideLayer(
       width: `${(layout.width ?? CONTENT_W) * k}px`,
       fontSize: `${fontSize * k}px`,
       lineHeight: isTitle ? "1.2" : "1.6",
-      fontFamily: `"${FONT}", sans-serif`,
-      fontWeight: isTitle ? String(theme.fontWeight) : "400",
+      fontFamily: `"${layout.fontFamily ?? FONT}", sans-serif`,
+      fontWeight: elementWeight(isTitle ? "title" : "content", layout.bold, theme),
       color: textColor,
       textAlign: layout.align ?? textAlign,
       background: "transparent",
@@ -840,8 +867,7 @@ function SlideLayer(
         <Text
           width={pos("title").width ?? CONTENT_W}
           text={slide.title}
-          fontSize={pos("title").fontSize ?? titleSize} fontFamily={FONT} fontStyle={String(theme.fontWeight)}
-          fill={textColor} lineHeight={1.2} align={(pos("title") as any).align ?? textAlign} wrap="word"
+          fontSize={pos("title").fontSize ?? titleSize} fontFamily={pos("title").fontFamily ?? FONT} fontStyle={elementWeight("title", pos("title").bold, theme)} fill={textColor} lineHeight={1.2} align={(pos("title") as any).align ?? textAlign} wrap="word"
         />
       </Group>
 
@@ -886,7 +912,7 @@ function SlideLayer(
           <Text
             width={pos("content").width ?? CONTENT_W}
             text={slide.body_text}
-            fontSize={pos("content").fontSize ?? bodySize} fontFamily={FONT} fontStyle="400"
+            fontSize={pos("content").fontSize ?? bodySize} fontFamily={pos("content").fontFamily ?? FONT} fontStyle={elementWeight("content", pos("content").bold, theme)}
             fill={textColor} lineHeight={1.6} align={(pos("content") as any).align ?? textAlign} wrap="word"
           />
         ) : (
