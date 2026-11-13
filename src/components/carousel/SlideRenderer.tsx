@@ -459,7 +459,7 @@ function SlideLayer(
   }, [selectedTextId])
   // ▲▲▲ FITUR-TEKS: SELESAI ▲▲▲
 
-  const GUIDELINE_OFFSET = 8
+  const GUIDELINE_OFFSET = 12
 
   function getLineGuideStops(stage: Konva.Stage, skipNode: Konva.Node) {
     const vertical = [0, PAD, CANVAS_W / 2, CANVAS_W - PAD, CANVAS_W]
@@ -992,10 +992,12 @@ function SlideLayer(
       {guides.map((guide, i) =>
         guide.orientation === "H" ? (
           <Line key={i} points={[-6000, 0, 6000, 0]} x={0} y={guide.lineGuide}
-            stroke="#00a1ff" strokeWidth={1} dash={[4, 6]} listening={false} />
+            stroke="#ff2d9a" strokeWidth={1.5} dash={[6, 4]}
+            strokeScaleEnabled={false} listening={false} />
         ) : (
           <Line key={i} points={[0, -6000, 0, 6000]} x={guide.lineGuide} y={0}
-            stroke="#00a1ff" strokeWidth={1} dash={[4, 6]} listening={false} />
+            stroke="#ff2d9a" strokeWidth={1.5} dash={[6, 4]}
+            strokeScaleEnabled={false} listening={false} />
         )
       )}
       
